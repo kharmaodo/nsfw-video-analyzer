@@ -1,0 +1,78 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis-data:/data
+
+  api:
+    build: ./backend
+    env_file:
+      - path: ./backend/.env.example
+      - path: ./backend/.env
+        required: false
+    command: >-
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - video-database:/app/storage/database
+      - video-temporary:/app/storage/temporary
+
+  worker:
+    build: ./backend
+    env_file:
+      - path: ./backend/.env.example
+      - path: ./backend/.env
+        required: false
+    command: >-
+      celery -A app.workers.celery_app:celery_app worker
+      --loglevel=INFO --concurrency=1 --prefetch-multiplier=1
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - video-database:/app/storage/database
+      - video-temporary:/app/storage/temporary
+      - model-cache:/app/storage/model-cache
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  redis-data:
+  video-database:
+  video-temporary:
+  model-cache:

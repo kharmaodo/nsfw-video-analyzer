@@ -1,0 +1,8 @@
+.env
+.pytest_cache/
+.coverage
+.venv/
+__pycache__/
+*.py[cod]
+storage/database/*.db*
+storage/temporary/*

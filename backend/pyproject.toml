@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nsfw-video-analyzer-backend"
+version = "0.1.0"
+description = "API de collecte et d'analyse échantillonnée de vidéos"
+requires-python = ">=3.11"
+dependencies = [
+  "alembic>=1.13,<2",
+  "beautifulsoup4>=4.12,<5",
+  "celery[redis]>=5.4,<6",
+  "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
+  "pydantic-settings>=2.6,<3",
+  "prometheus-client>=0.21,<1",
+  "redis>=5,<7",
+  "sqlalchemy>=2.0,<3",
+  "uvicorn[standard]>=0.32,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pillow>=10,<13",
+  "pytest-asyncio>=0.24,<1",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+]
+ml = [
+  "pillow>=10,<13",
+  "torch>=2.4,<3",
+  "transformers>=4.45,<5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
