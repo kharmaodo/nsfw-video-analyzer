@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     scraper_read_timeout_seconds: float = Field(default=15, gt=0, le=120)
     scraper_max_html_bytes: int = Field(default=2 * 1024 * 1024, ge=1024, le=10 * 1024 * 1024)
     scraper_max_redirects: int = Field(default=5, ge=0, le=10)
+    ytdlp_cookies_file: str | None = None
     video_max_size_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=1024)
     video_require_range_requests: bool = True
     video_allowed_content_types: Annotated[tuple[str, ...], NoDecode] = (

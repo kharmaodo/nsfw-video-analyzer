@@ -22,6 +22,10 @@ class RemoteVideoMetadata:
 class RemoteVideoInspector:
     FALLBACK_STATUSES = {403, 405, 501}
 
+    @classmethod
+    def should_fallback_to_range_get(cls, status_code: int) -> bool:
+        return status_code in cls.FALLBACK_STATUSES or 500 <= status_code <= 599
+
     def __init__(
         self,
         settings: Settings,
@@ -46,7 +50,7 @@ class RemoteVideoInspector:
         ) as client:
             response, final_url = await self._request_with_redirects(client, "HEAD", initial_url)
             try:
-                if response.status_code in self.FALLBACK_STATUSES:
+                if self.should_fallback_to_range_get(response.status_code):
                     await response.aclose()
                     response, final_url = await self._request_with_redirects(
                         client,
@@ -122,4 +126,3 @@ class RemoteVideoInspector:
             size_bytes=size_bytes,
             accepts_ranges=accepts_ranges,
         )
-

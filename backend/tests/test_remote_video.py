@@ -64,6 +64,36 @@ async def test_falls_back_to_streaming_range_get_when_head_is_rejected() -> None
 
 
 @pytest.mark.asyncio
+async def test_falls_back_to_range_get_when_head_returns_server_error() -> None:
+    methods: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "HEAD":
+            return httpx.Response(500)
+        return httpx.Response(
+            206,
+            headers={
+                "content-type": "video/mp4",
+                "content-range": "bytes 0-0/151700000",
+            },
+            content=b"x",
+        )
+
+    inspector = RemoteVideoInspector(
+        Settings(),
+        security=AllowAll(),  # type: ignore[arg-type]
+        transport=httpx.MockTransport(handler),
+    )
+
+    metadata = await inspector.inspect("https://archive.example/video.mp4")
+
+    assert methods == ["HEAD", "GET"]
+    assert metadata.size_bytes == 151700000
+    assert metadata.accepts_ranges is True
+
+
+@pytest.mark.asyncio
 async def test_rejects_video_without_range_support() -> None:
     transport = httpx.MockTransport(
         lambda _request: httpx.Response(
@@ -99,4 +129,3 @@ async def test_rejects_oversized_video() -> None:
 
     with pytest.raises(RemoteVideoError, match="dépasse"):
         await inspector.inspect("https://cdn.example/video.mp4")
-

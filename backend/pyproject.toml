@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "API de collecte et d'analyse échantillonnée de vidéos"
 requires-python = ">=3.11"
 dependencies = [
+  "yt-dlp[default]>=2026.7.4,<2027",
   "alembic>=1.13,<2",
   "beautifulsoup4>=4.12,<5",
   "celery[redis]>=5.4,<6",

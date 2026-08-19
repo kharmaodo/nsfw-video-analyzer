@@ -1,5 +1,6 @@
 from app.db.models import Video, VideoStatus
 from app.repositories.video_repository import VideoRepository
+from app.services.media_resolver import MediaResolutionError, MediaResolver
 from app.services.remote_video import RemoteVideoError, RemoteVideoInspector
 
 
@@ -12,25 +13,33 @@ class VideoNotDiscoverableError(ValueError):
 
 
 class VideoValidationService:
-    def __init__(self, inspector: RemoteVideoInspector, repository: VideoRepository) -> None:
+    def __init__(
+        self,
+        inspector: RemoteVideoInspector,
+        repository: VideoRepository,
+        media_resolver: MediaResolver | None = None,
+    ) -> None:
         self.inspector = inspector
         self.repository = repository
+        self.media_resolver = media_resolver or MediaResolver()
 
     async def validate(self, video_id: int) -> Video:
         video = self.repository.get(video_id)
         if video is None:
             raise VideoNotFoundError("Vidéo introuvable.")
-        if video.status != VideoStatus.DISCOVERED:
+        if video.status not in {VideoStatus.DISCOVERED, VideoStatus.REJECTED}:
             raise VideoNotDiscoverableError(
-                f"La vidéo doit être au statut DISCOVERED, statut actuel : {video.status.value}."
+                "La vidéo doit être au statut DISCOVERED ou REJECTED, "
+                f"statut actuel : {video.status.value}."
             )
 
         video.status = VideoStatus.VALIDATING
         video.error_message = None
         self.repository.save(video)
         try:
-            metadata = await self.inspector.inspect(video.video_url)
-        except RemoteVideoError as exc:
+            media = await self.media_resolver.resolve(video.video_url)
+            metadata = await self.inspector.inspect(media.stream_url)
+        except (MediaResolutionError, RemoteVideoError) as exc:
             video.status = VideoStatus.REJECTED
             video.error_message = str(exc)
             return self.repository.save(video)
