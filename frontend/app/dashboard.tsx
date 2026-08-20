@@ -57,6 +57,20 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
+function uploadFailureMessage(status: number, responseText: string): string {
+  const fallback = status === 413
+    ? "Le fichier dépasse la taille maximale autorisée."
+    : `Téléversement refusé (HTTP ${status}).`;
+  const body = responseText.trim();
+  if (!body) return fallback;
+  try {
+    const payload = JSON.parse(body) as { detail?: unknown };
+    return typeof payload.detail === "string" ? payload.detail : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function formatBytes(bytes: number | null) {
   if (bytes === null) return "—";
   const units = ["o", "Ko", "Mo", "Go"];
@@ -198,10 +212,10 @@ export default function Dashboard() {
 
     request.onload = async () => {
       try {
-        const result = JSON.parse(request.responseText) as UploadResult | { detail?: string };
         if (request.status < 200 || request.status >= 300) {
-          throw new Error("detail" in result ? result.detail : "Téléversement refusé.");
+          throw new Error(uploadFailureMessage(request.status, request.responseText));
         }
+        const result = JSON.parse(request.responseText) as UploadResult;
         const media = result.created[0];
         const failure = result.failures[0];
         if (!media) throw new Error(failure?.error ?? "Aucun média créé.");

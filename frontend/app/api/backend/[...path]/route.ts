@@ -6,7 +6,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   const target = new URL(`/${path.join("/")}${incoming.search}`, BACKEND_URL);
   const headers = new Headers(request.headers);
   headers.delete("host");
-  const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
+  const body = request.method === "GET" || request.method === "HEAD" ? undefined : request.body;
   try {
     const response = await fetch(target, { method: request.method, headers, body, redirect: "manual" });
     return new Response(response.body, { status: response.status, headers: response.headers });
