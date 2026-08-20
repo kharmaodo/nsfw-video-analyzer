@@ -31,8 +31,17 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
         request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
         content_length = request.headers.get("content-length")
+        is_media_upload = (
+            request.method == "POST"
+            and request.url.path.rstrip("/") == "/api/v1/media/uploads"
+        )
+        maximum_request_bytes = (
+            self.settings.media_upload_max_total_bytes
+            if is_media_upload
+            else self.settings.api_max_request_bytes
+        )
         try:
-            oversized = bool(content_length) and int(content_length) > self.settings.api_max_request_bytes
+            oversized = bool(content_length) and int(content_length) > maximum_request_bytes
         except ValueError:
             return JSONResponse(
                 status_code=400,

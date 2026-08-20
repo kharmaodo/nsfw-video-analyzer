@@ -22,6 +22,7 @@ nsfw_classifier = TransformersNsfwClassifier(settings)
 def cleanup_sample_frames(frame_paths: tuple[Path, ...]) -> None:
     temporary_root = Path(settings.video_temporary_directory).resolve()
     directories: set[Path] = set()
+
     for frame_path in frame_paths:
         resolved = frame_path.resolve()
         if not resolved.is_relative_to(temporary_root):
@@ -40,20 +41,21 @@ async def process_queued_video(
     video_id: int,
     processor: VideoProcessor,
     classifier: TransformersNsfwClassifier,
+    task_id: str | None = None,
 ) -> dict[str, int | float | str]:
     with SessionLocal() as session:
         repository = VideoRepository(session)
-        video = repository.get(video_id)
-        if video is None:
-            raise LookupError(f"Vidéo {video_id} introuvable.")
-        if video.status not in {VideoStatus.QUEUED, VideoStatus.PROCESSING}:
-            raise ValueError(
-                f"Vidéo {video_id} non traitable au statut {video.status.value}."
-            )
+        video = repository.claim_processing(video_id, task_id)
 
-        video.status = VideoStatus.PROCESSING
-        video.error_message = None
-        repository.save(video)
+        if video is None:
+            existing = repository.get(video_id)
+            if existing is None:
+                raise LookupError(f"Vidéo {video_id} introuvable.")
+            return {
+                "video_id": video_id,
+                "status": existing.status.value,
+                "skipped": "already claimed",
+            }
 
         media_type = video.media_type
         storage_path = video.storage_path
@@ -69,10 +71,7 @@ async def process_queued_video(
         else:
             sample = await processor.extract_central_frames(video_id, local_path)
             try:
-                summary = await asyncio.to_thread(
-                    classifier.classify,
-                    sample.frame_paths,
-                )
+                summary = await asyncio.to_thread(classifier.classify, sample.frame_paths)
             finally:
                 if settings.nsfw_cleanup_frames:
                     cleanup_sample_frames(sample.frame_paths)
@@ -124,6 +123,7 @@ def mark_video_error(video_id: int, message: str) -> None:
         video = repository.get(video_id)
         if video is None:
             return
+
         video.status = VideoStatus.ERROR
         video.error_message = message[-2000:]
         repository.save(video)
@@ -137,7 +137,12 @@ def mark_video_error(video_id: int, message: str) -> None:
 def process_video_task(self: Task, video_id: int) -> dict[str, int | float | str]:
     try:
         return asyncio.run(
-            process_queued_video(video_id, VideoProcessor(settings), nsfw_classifier)
+            process_queued_video(
+                video_id,
+                VideoProcessor(settings),
+                nsfw_classifier,
+                task_id=self.request.id,
+            )
         )
     except (
         MediaUploadError,

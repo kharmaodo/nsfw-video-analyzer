@@ -1,4 +1,4 @@
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Video, VideoStatus
@@ -80,6 +80,35 @@ class VideoRepository:
         if result.rowcount != 1:
             return None
         return self.get(video_id)
+
+    def claim_processing(self, video_id: int, task_id: str | None) -> Video | None:
+        claimable_status = Video.status == VideoStatus.QUEUED
+        if task_id is not None:
+            claimable_status = or_(
+                claimable_status,
+                and_(
+                    Video.status == VideoStatus.PROCESSING,
+                    Video.task_id == task_id,
+                ),
+            )
+
+        values: dict[str, VideoStatus | str | None] = {
+            "status": VideoStatus.PROCESSING,
+            "error_message": None,
+        }
+        if task_id is not None:
+            values["task_id"] = task_id
+
+        result = self.session.execute(
+            update(Video)
+            .where(Video.id == video_id, claimable_status)
+            .values(**values)
+        )
+        self.session.commit()
+        if result.rowcount != 1:
+            return None
+        return self.get(video_id)
+
 
     def delete(self, video: Video) -> None:
         self.session.delete(video)
