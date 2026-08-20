@@ -38,6 +38,7 @@ services:
     volumes:
       - video-database:/app/storage/database
       - video-temporary:/app/storage/temporary
+      - media-storage:/app/storage/media
 
   worker:
     build: ./backend
@@ -56,6 +57,7 @@ services:
     volumes:
       - video-database:/app/storage/database
       - video-temporary:/app/storage/temporary
+      - media-storage:/app/storage/media
       - model-cache:/app/storage/model-cache
 
   frontend:
@@ -78,3 +80,4 @@ volumes:
   video-database:
   video-temporary:
   model-cache:
+  media-storage:

@@ -62,3 +62,10 @@ docker compose down
 ```
 
 `docker compose down --volumes` détruit les volumes et leurs données. Ne l’utilisez qu’après une sauvegarde vérifiée.
+
+## Médias importés
+
+Les médias locaux sont stockés dans le volume Docker `media-storage`, monté dans
+l’API et le worker sous `/app/storage/media`. Ce répertoire n’est pas exposé
+directement par HTTP. Sauvegardez ce volume avec SQLite si la conservation des
+médias est requise.
