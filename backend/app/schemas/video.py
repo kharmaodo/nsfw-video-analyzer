@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
-from app.db.models import VideoStatus
+from app.db.models import MediaType, VideoStatus
 
 
 class VideoCreate(BaseModel):
@@ -19,6 +19,10 @@ class VideoRead(BaseModel):
     page_url: str
     video_url: str
     resolved_video_url: str | None
+    media_type: MediaType
+    original_filename: str | None
+    width: int | None
+    height: int | None
     content_type: str | None
     size_bytes: int | None
     duration_seconds: float | None

@@ -19,6 +19,12 @@ class VideoStatus(str, enum.Enum):
     ERROR = "ERROR"
 
 
+
+class MediaType(str, enum.Enum):
+    VIDEO = "VIDEO"
+    IMAGE = "IMAGE"
+
+
 class Video(Base):
     __tablename__ = "videos"
     __table_args__ = (
@@ -30,6 +36,17 @@ class Video(Base):
     page_url: Mapped[str] = mapped_column(Text, nullable=False)
     video_url: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     resolved_video_url: Mapped[str | None] = mapped_column(Text)
+    media_type: Mapped[MediaType] = mapped_column(
+        Enum(MediaType, native_enum=False, length=16),
+        nullable=False,
+        default=MediaType.VIDEO,
+        server_default=MediaType.VIDEO.value,
+    )
+    original_filename: Mapped[str | None] = mapped_column(String(500))
+    storage_path: Mapped[str | None] = mapped_column(Text, unique=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), unique=True)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
     content_type: Mapped[str | None] = mapped_column(String(255))
     size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     duration_seconds: Mapped[float | None] = mapped_column(Float)

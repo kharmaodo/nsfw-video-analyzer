@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     scraper_max_redirects: int = Field(default=5, ge=0, le=10)
     ytdlp_cookies_file: str | None = None
     video_max_size_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=1024)
+    image_max_size_bytes: int = Field(default=25 * 1024 * 1024, ge=1024)
+    media_upload_max_files: int = Field(default=10, ge=1, le=100)
+    media_storage_directory: str = "./storage/media"
     video_require_range_requests: bool = True
     video_allowed_content_types: Annotated[tuple[str, ...], NoDecode] = (
         "video/mp4",
