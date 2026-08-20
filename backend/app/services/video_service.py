@@ -1,5 +1,8 @@
 from math import ceil
 
+from app.core.config import get_settings
+from app.services.media_upload import LocalMediaUploadService
+
 from app.db.models import Video, VideoStatus
 from app.repositories.video_repository import VideoRepository
 from app.schemas.video import VideoCreate, VideoListResponse
@@ -83,6 +86,12 @@ class VideoService:
         video = self.repository.get(video_id)
         if video is None:
             return False
+
+        storage_path = video.storage_path
         self.repository.delete(video)
+
+        if storage_path:
+            LocalMediaUploadService(get_settings()).delete(storage_path)
+
         return True
 

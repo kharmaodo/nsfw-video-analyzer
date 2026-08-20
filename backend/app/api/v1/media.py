@@ -44,7 +44,7 @@ async def upload_media(
             raise HTTPException(status_code=400, detail="En-tête Content-Length invalide.") from None
         if request_size > settings.media_upload_max_total_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="La requête dépasse la taille totale maximale autorisée.",
             )
 
@@ -60,7 +60,7 @@ async def upload_media(
         )
     if len(files) > settings.media_upload_max_files:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Nombre maximal de fichiers dépassé.",
         )
 

@@ -41,7 +41,7 @@ async def test_rejects_declared_mime_that_does_not_match_content(tmp_path) -> No
     with pytest.raises(MediaUploadError, match="MIME"):
         await service.store_image(upload)
 
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("*.png")) == []
 
 
 def test_upload_endpoint_returns_successes_and_failures(client, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -229,3 +229,31 @@ def test_upload_endpoint_rate_limits_client(
     assert second.json()["detail"] == (
         "Trop de téléversements. Réessayez dans quelques instants."
     )
+
+
+def test_delete_local_media_removes_stored_file(
+    client,
+    tmp_path,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    from app.services import video_service
+
+    settings = Settings(media_storage_directory=str(tmp_path))
+    monkeypatch.setattr(media_api, "get_settings", lambda: settings)
+    monkeypatch.setattr(video_service, "get_settings", lambda: settings)
+
+    imported = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("to-delete.png", image_bytes(), "image/png")},
+    )
+
+    assert imported.status_code == 201
+    media_id = imported.json()["created"][0]["id"]
+    stored_files = list(tmp_path.glob("*.png"))
+    assert len(stored_files) == 1
+
+    deleted = client.delete(f"/api/v1/videos/{media_id}")
+
+    assert deleted.status_code == 204
+    assert list(tmp_path.glob("*.png")) == []
+    assert client.get(f"/api/v1/media/{media_id}").status_code == 404
