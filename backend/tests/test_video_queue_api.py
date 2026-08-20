@@ -80,3 +80,19 @@ def test_enqueue_unknown_video(client: TestClient) -> None:
     install_queue_override(lambda _video_id: FakeTask())
     assert client.post("/api/v1/videos/999/enqueue").status_code == 404
 
+def test_requeue_queued_video(client: TestClient) -> None:
+    video_id = create_ready_video(client)
+    install_queue_override(lambda _video_id: FakeTask("initial-task"))
+
+    queued = client.post(f"/api/v1/videos/{video_id}/enqueue")
+    assert queued.status_code == 202
+
+    install_queue_override(lambda _video_id: FakeTask("recovered-task"))
+    response = client.post(f"/api/v1/media/{video_id}/requeue")
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "video_id": video_id,
+        "task_id": "recovered-task",
+        "status": "QUEUED",
+    }

@@ -92,6 +92,33 @@ async def upload_media(
     return MediaUploadResponse(created=created, failures=failures)
 
 
+@router.post(
+    "/{media_id}/requeue",
+    response_model=EnqueueResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def requeue_media(
+    media_id: int,
+    service: VideoQueueDependency,
+) -> EnqueueResponse:
+    try:
+        return service.requeue(media_id)
+    except QueueVideoNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except VideoNotQueueableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except QueueUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
 @router.get("", response_model=VideoListResponse)
 def list_media(
     service: VideoServiceDependency,
