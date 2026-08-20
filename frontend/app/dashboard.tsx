@@ -3,7 +3,7 @@
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CircleOff,
   Clock3, Database, ExternalLink, FileImage, Film, ImagePlus, LoaderCircle,
-  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X,
+  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X,CalendarDays, MapPin
 } from "lucide-react";
 import {
   DragEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo,
@@ -17,7 +17,7 @@ type MediaType = "IMAGE" | "VIDEO";
 type Video = {
   id: number; title: string; page_url: string; video_url: string;
   resolved_video_url: string | null; media_type: MediaType;
-  original_filename: string | null; width: number | null; height: number | null;
+  original_filename: string | null; metadata_title: string | null; media_created_at: string | null; gps_latitude: number | null; gps_longitude: number | null; width: number | null; height: number | null;
   content_type: string | null; size_bytes: number | null;
   duration_seconds: number | null; accepts_ranges: boolean | null;
   status: VideoStatus; nsfw_score: number | null; nsfw_average_score: number | null;
@@ -79,6 +79,22 @@ function sourceLabel(media: Video) {
     ?? (media.page_url.startsWith("local://") ? "Média local" : new URL(media.page_url).hostname);
 }
 
+function MediaMetadata({ media }: { media: Video }) {
+  const hasGps = media.gps_latitude !== null && media.gps_longitude !== null;
+  const date = media.media_created_at
+    ? media.media_created_at.replace("T", " ").slice(0, 16)
+    : null;
+
+  if (!media.metadata_title && !date && !hasGps) return null;
+
+  return (
+    <span className="media-metadata">
+      {media.metadata_title && <span className="metadata-chip">Titre intégré</span>}
+      {date && <span className="metadata-date"><CalendarDays size={12} />{date}</span>}
+      {hasGps && <span className="metadata-chip gps" title="Ce média contient une localisation GPS"><MapPin size={12} />GPS détecté</span>}
+    </span>
+  );
+}
 function StatusBadge({ status }: { status: VideoStatus }) {
   const Icon = status === "SAMPLED_SAFE" ? ShieldCheck
     : status === "SAMPLED_NSFW" ? ShieldX
@@ -394,7 +410,7 @@ export default function Dashboard() {
                   const selectable = media.status === "READY" && media.page_url.startsWith("local://");
                   return <tr key={media.id}>
                     <td>{selectable && <input className="media-checkbox" type="checkbox" checked={selectedIds.includes(media.id)} onChange={() => toggleSelection(media.id)} aria-label={`Sélectionner ${media.title}`} />}</td>
-                    <td><div className="video-title"><span className="video-thumb">{media.media_type === "IMAGE" ? <FileImage size={18} /> : <Play size={18} fill="currentColor" />}</span><div><strong>{media.title}</strong><span className="media-source">{sourceLabel(media)}{media.media_type === "VIDEO" && !media.page_url.startsWith("local://") && <ExternalLink size={12} />}</span></div></div></td>
+                    <td><div className="video-title"><span className="video-thumb">{media.media_type === "IMAGE" ? <FileImage size={18} /> : <Play size={18} fill="currentColor" />}</span><div><strong>{media.title}</strong><span className="media-source">{sourceLabel(media)}{media.media_type === "VIDEO" && !media.page_url.startsWith("local://") && <ExternalLink size={12} />}</span><MediaMetadata media={media} /></div></div></td>
                     <td><StatusBadge status={media.status} />{media.error_message && <span className="row-error" title={media.error_message}>Voir l’erreur</span>}</td>
                     <td><strong className="cell-main">{formatBytes(media.size_bytes)}</strong><span className="cell-sub">{media.content_type ?? "type inconnu"}{media.width && media.height ? ` · ${media.width}×${media.height}` : ""}</span></td>
                     <td><strong className="cell-main">{formatDuration(media.duration_seconds)}</strong><span className="cell-sub">{media.sampled_frames ? `${media.sampled_frames} frame${media.sampled_frames > 1 ? "s" : ""}` : "non extrait"}</span></td>
