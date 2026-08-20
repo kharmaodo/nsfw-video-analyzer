@@ -131,3 +131,42 @@ def test_media_enqueue_returns_404_when_media_does_not_exist(client) -> None:  #
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Vidéo introuvable."
+
+
+def test_upload_endpoint_reports_duplicate_image_friendly(
+    client,
+    tmp_path,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(
+        media_api,
+        "get_settings",
+        lambda: Settings(
+            media_storage_directory=str(tmp_path),
+            media_upload_max_files=3,
+        ),
+    )
+
+    first = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("already-imported.png", image_bytes(), "image/png")},
+    )
+    assert first.status_code == 201
+    assert len(first.json()["created"]) == 1
+
+    duplicate = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("already-imported.png", image_bytes(), "image/png")},
+    )
+
+    assert duplicate.status_code == 201
+    assert duplicate.json()["created"] == []
+    assert duplicate.json()["failures"] == [
+        {
+            "filename": "already-imported.png",
+            "error": (
+                "Ce média a déjà été importé. "
+                "Utilisez l’élément existant dans la liste."
+            ),
+        }
+    ]

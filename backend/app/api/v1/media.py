@@ -50,11 +50,20 @@ async def upload_media(
         try:
             video = await service.store(file)
             created.append(repository.create(video))
-        except (MediaUploadError, IntegrityError) as exc:
-            if isinstance(exc, IntegrityError) and video is not None:
+        except IntegrityError:
+            if video is not None:
                 service.delete(video.storage_path)
+            failures.append(
+                MediaUploadFailure(
+                    filename=filename,
+                    error=(
+                        "Ce média a déjà été importé. "
+                        "Utilisez l’élément existant dans la liste."
+                    ),
+                )
+            )
+        except MediaUploadError as exc:
             failures.append(MediaUploadFailure(filename=filename, error=str(exc)))
-
     return MediaUploadResponse(created=created, failures=failures)
 
 

@@ -6,3 +6,4 @@ __pycache__/
 *.py[cod]
 storage/database/*.db*
 storage/temporary/*
+storage/media/*

@@ -19,7 +19,7 @@ COPY alembic.ini ./
 
 RUN python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3" \
     && python -m pip install '.[ml]' \
-    && mkdir -p /app/storage/database /app/storage/temporary /app/storage/model-cache \
+    && mkdir -p /app/storage/database /app/storage/temporary /app/storage/model-cache /app/storage/media \
     && chown -R app:app /app
 
 USER app
