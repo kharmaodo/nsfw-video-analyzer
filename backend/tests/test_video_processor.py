@@ -85,3 +85,21 @@ async def test_rejects_invalid_ffprobe_output(tmp_path) -> None:
     with pytest.raises(VideoProcessingError, match="durée valide"):
         await processor.probe_duration("https://cdn.example/video.mp4")
 
+
+
+@pytest.mark.asyncio
+async def test_local_video_does_not_enable_network_protocols(tmp_path) -> None:
+    source = tmp_path / "local.mp4"
+    source.write_bytes(b"video")
+
+    runner = FakeRunner(tmp_path)
+    processor = VideoProcessor(
+        Settings(video_temporary_directory=str(tmp_path)),
+        runner=runner,  # type: ignore[arg-type]
+    )
+
+    await processor.extract_central_frames(9, source)
+
+    assert "-protocol_whitelist" not in runner.commands[0]
+    assert "-protocol_whitelist" not in runner.commands[1]
+    assert str(source.resolve()) in runner.commands[1]
