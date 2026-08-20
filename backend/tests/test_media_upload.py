@@ -65,5 +65,41 @@ def test_upload_endpoint_returns_successes_and_failures(client, tmp_path, monkey
     assert body["created"][0]["status"] == "READY"
     assert body["created"][0]["original_filename"] == "safe.png"
     assert body["failures"] == [
-        {"filename": "unsupported.txt", "error": "Seules les images sont disponibles dans ce premier lot."}
+        {"filename": "unsupported.txt", "error": "Le fichier n’est pas une vidéo valide."}
     ]
+
+
+def video_bytes(tmp_path) -> bytes:  # type: ignore[no-untyped-def]
+    import subprocess
+
+    path = tmp_path / "sample.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=16x12:d=1",
+            "-an", "-y", str(path),
+        ],
+        check=True,
+    )
+    return path.read_bytes()
+
+
+@pytest.mark.asyncio
+async def test_stores_valid_video_with_ffprobe_metadata(tmp_path) -> None:
+    service = LocalMediaUploadService(
+        Settings(media_storage_directory=str(tmp_path))
+    )
+    upload = UploadFile(
+        filename="clip.mp4",
+        file=BytesIO(video_bytes(tmp_path)),
+        headers={"content-type": "video/mp4"},
+    )
+
+    video = await service.store(upload)
+
+    assert video.media_type == MediaType.VIDEO
+    assert video.status == VideoStatus.READY
+    assert video.content_type == "video/mp4"
+    assert (video.width, video.height) == (16, 12)
+    assert video.duration_seconds and video.duration_seconds > 0
+    assert video.sampled_frames >= 1
