@@ -170,3 +170,62 @@ def test_upload_endpoint_reports_duplicate_image_friendly(
             ),
         }
     ]
+
+
+def test_upload_endpoint_rejects_request_exceeding_total_limit(
+    client,
+    tmp_path,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(
+        media_api,
+        "get_settings",
+        lambda: Settings(
+            media_storage_directory=str(tmp_path),
+            media_upload_max_total_bytes=1024,
+        ),
+    )
+    monkeypatch.setattr(media_api, "upload_rate_limiter", media_api.UploadRateLimiter())
+
+    response = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("too-large.bin", b"x" * 2048, "application/octet-stream")},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == (
+        "La requête dépasse la taille totale maximale autorisée."
+    )
+
+
+def test_upload_endpoint_rate_limits_client(
+    client,
+    tmp_path,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(
+        media_api,
+        "get_settings",
+        lambda: Settings(
+            media_storage_directory=str(tmp_path),
+            media_upload_rate_limit_requests=1,
+            media_upload_rate_limit_window_seconds=60,
+        ),
+    )
+    monkeypatch.setattr(media_api, "upload_rate_limiter", media_api.UploadRateLimiter())
+
+    first = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("first.png", image_bytes(), "image/png")},
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        "/api/v1/media/uploads",
+        files={"files": ("second.png", image_bytes("JPEG"), "image/jpeg")},
+    )
+
+    assert second.status_code == 429
+    assert second.json()["detail"] == (
+        "Trop de téléversements. Réessayez dans quelques instants."
+    )

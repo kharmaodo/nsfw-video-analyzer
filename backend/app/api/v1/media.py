@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.schemas.jobs import EnqueueResponse
 from app.schemas.media import MediaUploadFailure, MediaUploadResponse
 from app.schemas.video import VideoListResponse, VideoRead
 from app.services.media_upload import LocalMediaUploadService, MediaUploadError
+from app.services.media_upload_rate_limiter import UploadRateLimiter
 from app.services.video_queue_service import (
     QueueUnavailableError,
     QueueVideoNotFoundError,
@@ -21,6 +22,7 @@ from app.services.video_queue_service import (
 
 router = APIRouter(prefix="/media", tags=["media"])
 DbSession = Annotated[Session, Depends(get_db)]
+upload_rate_limiter = UploadRateLimiter()
 
 
 @router.post(
@@ -31,8 +33,31 @@ DbSession = Annotated[Session, Depends(get_db)]
 async def upload_media(
     files: Annotated[list[UploadFile], File(...)],
     db: DbSession,
+    request: Request,
 ) -> MediaUploadResponse:
     settings = get_settings()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            request_size = int(content_length)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="En-tête Content-Length invalide.") from None
+        if request_size > settings.media_upload_max_total_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="La requête dépasse la taille totale maximale autorisée.",
+            )
+
+    client_key = request.client.host if request.client else "unknown"
+    if not upload_rate_limiter.allow(
+        client_key,
+        maximum_requests=settings.media_upload_rate_limit_requests,
+        window_seconds=settings.media_upload_rate_limit_window_seconds,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de téléversements. Réessayez dans quelques instants.",
+        )
     if len(files) > settings.media_upload_max_files:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

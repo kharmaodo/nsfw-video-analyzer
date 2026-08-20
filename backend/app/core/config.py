@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     video_max_size_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=1024)
     image_max_size_bytes: int = Field(default=25 * 1024 * 1024, ge=1024)
     media_upload_max_files: int = Field(default=10, ge=1, le=100)
+    media_upload_max_total_bytes: int = Field(default=5 * 1024 * 1024 * 1024, ge=1024)
+    media_upload_rate_limit_requests: int = Field(default=20, ge=1, le=1000)
+    media_upload_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     media_storage_directory: str = "./storage/media"
     video_require_range_requests: bool = True
     video_allowed_content_types: Annotated[tuple[str, ...], NoDecode] = (
