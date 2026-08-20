@@ -1,13 +1,16 @@
 import asyncio
+import logging
 from pathlib import Path
 
 from celery import Task
+from celery.signals import worker_ready
 
 from app.core.config import get_settings
 from app.db.models import MediaType, VideoStatus
 from app.db.session import SessionLocal
 from app.repositories.video_repository import VideoRepository
 from app.services.media_upload import LocalMediaUploadService, MediaUploadError
+from app.services.video_queue_service import VideoQueueService
 from app.services.nsfw_classifier import (
     NsfwClassificationError,
     TransformersNsfwClassifier,
@@ -17,6 +20,7 @@ from app.workers.celery_app import celery_app
 
 settings = get_settings()
 nsfw_classifier = TransformersNsfwClassifier(settings)
+logger = logging.getLogger(__name__)
 
 
 def cleanup_sample_frames(frame_paths: tuple[Path, ...]) -> None:
@@ -159,3 +163,22 @@ def process_video_task(self: Task, video_id: int) -> dict[str, int | float | str
     except Exception as exc:
         mark_video_error(video_id, str(exc))
         raise
+
+
+def recover_queued_media() -> int:
+    with SessionLocal() as session:
+        service = VideoQueueService(
+            VideoRepository(session),
+            lambda video_id: process_video_task.delay(video_id),
+        )
+        return service.recover_queued()
+
+
+@worker_ready.connect
+def recover_queued_media_on_worker_ready(**_kwargs) -> None:
+    try:
+        recovered = recover_queued_media()
+        logger.info("queued_media_recovered count=%s", recovered)
+    except Exception:
+        logger.exception("queued_media_recovery_failed")
+

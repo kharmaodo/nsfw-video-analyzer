@@ -233,3 +233,46 @@ def test_cleanup_sample_frames_keeps_files_outside_temporary_directory(
     assert not local_frame.exists()
     assert not frame_directory.exists()
     assert external_frame.exists()
+
+
+def test_worker_requeues_queued_media_on_startup(tmp_path, monkeypatch) -> None:
+    engine = build_engine(f"sqlite:///{tmp_path / 'recovery.db'}")
+    Base.metadata.create_all(engine)
+    local_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr(video_tasks, "SessionLocal", local_session)
+
+    with local_session() as session:
+        video = Video(
+            title="À reprendre",
+            page_url="https://media.example",
+            video_url="https://cdn.example/recovery.mp4",
+            status=VideoStatus.QUEUED,
+        )
+        session.add(video)
+        session.commit()
+        video_id = video.id
+
+    dispatched: list[int] = []
+
+    class RecoveryTask:
+        id = "recovered-task-123"
+
+    class RecoveryDispatcher:
+        @staticmethod
+        def delay(media_id: int) -> RecoveryTask:
+            dispatched.append(media_id)
+            return RecoveryTask()
+
+    monkeypatch.setattr(video_tasks, "process_video_task", RecoveryDispatcher)
+
+    assert video_tasks.recover_queued_media() == 1
+    assert dispatched == [video_id]
+
+    with local_session() as session:
+        recovered = session.get(Video, video_id)
+        assert recovered is not None
+        assert recovered.status == VideoStatus.QUEUED
+        assert recovered.task_id == "recovered-task-123"
+
+    engine.dispose()
+
