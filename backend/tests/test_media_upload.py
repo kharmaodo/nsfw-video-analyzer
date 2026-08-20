@@ -257,3 +257,94 @@ def test_delete_local_media_removes_stored_file(
     assert deleted.status_code == 204
     assert list(tmp_path.glob("*.png")) == []
     assert client.get(f"/api/v1/media/{media_id}").status_code == 404
+
+
+def image_bytes_with_metadata() -> bytes:
+    output = BytesIO()
+    exif = Image.Exif()
+    exif[270] = "Titre EXIF dynamique"
+    exif[306] = "2026:08:20 09:30:18"
+    exif[36867] = "2026:08:20 09:30:18"
+    Image.new("RGB", (12, 8), "white").save(
+        output,
+        format="JPEG",
+        exif=exif,
+    )
+    return output.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_image_metadata_sets_dynamic_title_and_date(tmp_path) -> None:
+    service = LocalMediaUploadService(
+        Settings(media_storage_directory=str(tmp_path))
+    )
+    upload = UploadFile(
+        filename="fallback-name.jpg",
+        file=BytesIO(image_bytes_with_metadata()),
+        headers={"content-type": "image/jpeg"},
+    )
+
+    video = await service.store(upload)
+
+    assert video.title == "Titre EXIF dynamique"
+    assert video.metadata_title == "Titre EXIF dynamique"
+    assert video.media_created_at is not None
+    assert video.media_created_at.year == 2026
+
+
+def test_extract_image_metadata_reads_gps_coordinates(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from app.services import media_metadata
+
+    class Tag:
+        def __init__(self, value, values=None) -> None:
+            self.value = value
+            self.values = values if values is not None else value
+
+        def __str__(self) -> str:
+            return str(self.value)
+
+    path = tmp_path / "metadata.jpg"
+    path.write_bytes(b"image")
+
+    monkeypatch.setattr(
+        media_metadata.exifread,
+        "process_file",
+        lambda _source, details=False: {
+            "Image ImageDescription": Tag("Photo géolocalisée"),
+            "EXIF DateTimeOriginal": Tag("2026:08:20 09:30:18"),
+            "GPS GPSLatitude": Tag("", (14, 40, 30)),
+            "GPS GPSLatitudeRef": Tag("N"),
+            "GPS GPSLongitude": Tag("", (17, 25, 15)),
+            "GPS GPSLongitudeRef": Tag("W"),
+        },
+    )
+
+    metadata = media_metadata.extract_image_metadata(path)
+
+    assert metadata.title == "Photo géolocalisée"
+    assert metadata.media_created_at is not None
+    assert metadata.gps_latitude == pytest.approx(14.675)
+    assert metadata.gps_longitude == pytest.approx(-17.420833, abs=0.000001)
+
+
+@pytest.mark.asyncio
+async def test_image_without_metadata_uses_filename_as_title(tmp_path) -> None:
+    service = LocalMediaUploadService(
+        Settings(media_storage_directory=str(tmp_path))
+    )
+    upload = UploadFile(
+        filename="no-metadata.png",
+        file=BytesIO(image_bytes()),
+        headers={"content-type": "image/png"},
+    )
+
+    video = await service.store(upload)
+
+    assert video.title == "no-metadata"
+    assert video.metadata_title is None
+    assert video.media_created_at is None
+    assert video.gps_latitude is None
+    assert video.gps_longitude is None

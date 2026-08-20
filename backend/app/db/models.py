@@ -43,6 +43,10 @@ class Video(Base):
         server_default=MediaType.VIDEO.value,
     )
     original_filename: Mapped[str | None] = mapped_column(String(500))
+    metadata_title: Mapped[str | None] = mapped_column(String(500))
+    media_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gps_latitude: Mapped[float | None] = mapped_column(Float)
+    gps_longitude: Mapped[float | None] = mapped_column(Float)
     storage_path: Mapped[str | None] = mapped_column(Text, unique=True)
     sha256: Mapped[str | None] = mapped_column(String(64), unique=True)
     width: Mapped[int | None] = mapped_column(Integer)

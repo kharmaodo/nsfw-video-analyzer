@@ -9,6 +9,12 @@ from PIL import Image, UnidentifiedImageError
 
 from app.core.config import Settings
 from app.db.models import MediaType, Video, VideoStatus
+from app.services.media_metadata import (
+    ExtractedMediaMetadata,
+    extract_image_metadata,
+    normalize_title,
+    parse_media_created_at,
+)
 
 
 class MediaUploadError(ValueError):
@@ -63,8 +69,9 @@ class LocalMediaUploadService:
                 media_type = MediaType.IMAGE
                 duration_seconds = None
                 sampled_frames = 1
+                metadata = extract_image_metadata(destination)
             else:
-                content_type, width, height, duration_seconds = (
+                content_type, width, height, duration_seconds, metadata = (
                     await self._inspect_video(destination)
                 )
                 media_type = MediaType.VIDEO
@@ -76,7 +83,11 @@ class LocalMediaUploadService:
                 )
 
             return Video(
-                title=Path(filename).stem[:500] or "Média importé",
+                title=metadata.title or Path(filename).stem[:500] or "Média importé",
+                metadata_title=metadata.title,
+                media_created_at=metadata.media_created_at,
+                gps_latitude=metadata.gps_latitude,
+                gps_longitude=metadata.gps_longitude,
                 page_url=f"local://{destination.name}",
                 video_url=f"local://{destination.name}",
                 media_type=media_type,
@@ -135,12 +146,12 @@ class LocalMediaUploadService:
             raise MediaUploadError("Format image non autorisé.")
         return content_type, width, height
 
-    async def _inspect_video(self, path: Path) -> tuple[str, int, int, float]:
+    async def _inspect_video(self, path: Path) -> tuple[str, int, int, float, ExtractedMediaMetadata]:
         command = [
             self.settings.ffprobe_binary,
             "-v", "error",
             "-show_entries",
-            "format=format_name,duration:stream=codec_type,width,height",
+            "format=format_name,duration:format_tags=title,creation_time:stream=codec_type,width,height",
             "-of", "json",
             str(path),
         ]
@@ -171,6 +182,11 @@ class LocalMediaUploadService:
             )
             width, height = int(stream["width"]), int(stream["height"])
             format_name = str(payload["format"]["format_name"])
+            tags = payload["format"].get("tags", {})
+            metadata = ExtractedMediaMetadata(
+                title=normalize_title(tags.get("title")),
+                media_created_at=parse_media_created_at(tags.get("creation_time")),
+            )
         except (
             KeyError, TypeError, ValueError, StopIteration, json.JSONDecodeError
         ) as exc:
@@ -184,7 +200,7 @@ class LocalMediaUploadService:
         content_type = self._video_content_type(path, format_name)
         if content_type not in self.VIDEO_TYPES:
             raise MediaUploadError("Format vidéo non autorisé.")
-        return content_type, width, height, duration
+        return content_type, width, height, duration, metadata
 
     @staticmethod
     def _video_content_type(path: Path, format_name: str) -> str:

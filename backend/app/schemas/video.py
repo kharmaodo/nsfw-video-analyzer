@@ -21,6 +21,10 @@ class VideoRead(BaseModel):
     resolved_video_url: str | None
     media_type: MediaType
     original_filename: str | None
+    metadata_title: str | None
+    media_created_at: datetime | None
+    gps_latitude: float | None
+    gps_longitude: float | None
     width: int | None
     height: int | None
     content_type: str | None
