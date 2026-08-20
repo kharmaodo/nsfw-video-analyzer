@@ -103,3 +103,31 @@ async def test_stores_valid_video_with_ffprobe_metadata(tmp_path) -> None:
     assert (video.width, video.height) == (16, 12)
     assert video.duration_seconds and video.duration_seconds > 0
     assert video.sampled_frames >= 1
+
+
+def test_media_aliases_list_and_get_existing_video(client) -> None:  # type: ignore[no-untyped-def]
+    created = client.post(
+        "/api/v1/videos",
+        json={
+            "title": "Media alias",
+            "page_url": "https://example.org/page",
+            "video_url": "https://cdn.example.org/video.mp4",
+        },
+    )
+    assert created.status_code == 201
+    media_id = created.json()["id"]
+
+    listed = client.get("/api/v1/media?page=1&size=10")
+    assert listed.status_code == 200
+    assert listed.json()["total"] >= 1
+
+    detail = client.get(f"/api/v1/media/{media_id}")
+    assert detail.status_code == 200
+    assert detail.json()["id"] == media_id
+
+
+def test_media_enqueue_returns_404_when_media_does_not_exist(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.post("/api/v1/media/999999/enqueue")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Vidéo introuvable."
