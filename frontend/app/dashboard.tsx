@@ -10,6 +10,10 @@ import {
   useRef, useState,
 } from "react";
 
+import { api } from "./api-client";
+import { readSession, redirectToExpiredSessionLogin, redirectToLogin } from "./auth-session";
+
+
 type VideoStatus =
   | "DISCOVERED" | "VALIDATING" | "READY" | "REJECTED" | "QUEUED"
   | "PROCESSING" | "SAMPLED_SAFE" | "SAMPLED_NSFW" | "ERROR";
@@ -43,19 +47,6 @@ const statusLabels: Record<VideoStatus, string> = {
   SAMPLED_SAFE: "Sûre", SAMPLED_NSFW: "NSFW", ERROR: "Erreur",
 };
 const activeStatuses: VideoStatus[] = ["VALIDATING", "QUEUED", "PROCESSING"];
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
-  if (typeof init?.body === "string" && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  const response = await fetch(`/api/backend${path}`, { ...init, headers });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.detail ?? `Erreur HTTP ${response.status}`);
-  }
-  return response.status === 204 ? (undefined as T) : response.json();
-}
 
 function uploadFailureMessage(status: number, responseText: string): string {
   const fallback = status === 413
@@ -139,6 +130,11 @@ export default function Dashboard() {
   const [queueingSelection, setQueueingSelection] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!readSession()) redirectToLogin();
+  }, []);
+
+
   const loadVideos = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     const params = new URLSearchParams({ page: String(page), size: "10" });
@@ -201,6 +197,13 @@ export default function Dashboard() {
     formData.append("files", file, file.name);
     const request = new XMLHttpRequest();
     request.open("POST", "/api/backend/api/v1/media/uploads");
+    const session = readSession();
+    if (!session) {
+      redirectToLogin();
+      return;
+    }
+    request.setRequestHeader("Authorization", `Bearer ${session.accessToken}`);
+
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) return;
@@ -211,6 +214,11 @@ export default function Dashboard() {
     };
 
     request.onload = async () => {
+      if (request.status === 401) {
+        redirectToExpiredSessionLogin();
+        return;
+      }
+
       try {
         if (request.status < 200 || request.status >= 300) {
           throw new Error(uploadFailureMessage(request.status, request.responseText));

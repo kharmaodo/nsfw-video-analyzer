@@ -35,9 +35,15 @@ export function clearSession(): void {
   }
 }
 
+export function redirectToLogin(): void {
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
+}
+
 export function redirectToExpiredSessionLogin(): void {
   clearSession();
-  if (window.location.pathname !== "/login") {
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
     window.location.assign("/login?reason=expired");
   }
 }
