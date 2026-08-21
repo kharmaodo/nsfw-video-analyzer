@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.authentication import CurrentUserDependency
+
 from app.db.session import get_db
 from app.repositories.video_repository import VideoRepository
 from app.schemas.scraping import ScrapeRequest, ScrapeResponse
@@ -25,9 +27,11 @@ def get_scraping_service(db: Annotated[Session, Depends(get_db)]) -> ScrapingSer
 async def discover_videos(
     payload: ScrapeRequest,
     service: Annotated[ScrapingService, Depends(get_scraping_service)],
+    user: CurrentUserDependency,
+
 ) -> ScrapeResponse:
     try:
-        return await service.scrape(str(payload.page_url))
+        return await service.scrape(str(payload.page_url), owner_user_id=user.id)
     except UnsafeUrlError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ScrapingError as exc:

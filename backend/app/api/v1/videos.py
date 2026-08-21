@@ -15,6 +15,8 @@ from app.schemas.video import (
 )
 from app.services.video_service import InvalidStatusTransition, VideoService
 from app.core.config import get_settings
+from app.core.authentication import CurrentUserDependency
+
 from app.services.remote_video import RemoteVideoInspector
 from app.services.video_validation_service import (
     VideoNotDiscoverableError,
@@ -29,6 +31,11 @@ from app.services.video_sampling_service import (
     VideoSamplingService,
 )
 from app.schemas.jobs import EnqueueResponse
+from app.services.media_authorization_service import (
+    MediaAccessDeniedError,
+    MediaAuthorizationService,
+)
+
 from app.services.video_queue_service import (
     QueueUnavailableError,
     QueueVideoNotFoundError,
@@ -78,10 +85,29 @@ def get_queue_service(db: DbSession) -> VideoQueueService:
 VideoQueueDependency = Annotated[VideoQueueService, Depends(get_queue_service)]
 
 
-@router.post("", response_model=VideoRead, status_code=status.HTTP_201_CREATED)
-def create_video(payload: VideoCreate, service: VideoServiceDependency) -> VideoRead:
+
+
+def require_video_access(
+    video_id: int,
+    user: CurrentUserDependency,
+    repository: VideoRepository,
+) -> None:
+    video = repository.get(video_id)
+    if video is None:
+        return
     try:
-        return service.create(payload)
+        MediaAuthorizationService.require_access(user, video)
+    except MediaAccessDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vidéo introuvable.",
+        ) from exc
+
+
+@router.post("", response_model=VideoRead, status_code=status.HTTP_201_CREATED)
+def create_video(payload: VideoCreate, service: VideoServiceDependency, user: CurrentUserDependency) -> VideoRead:
+    try:
+        return service.create(payload, owner_user_id=user.id)
     except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -92,6 +118,8 @@ def create_video(payload: VideoCreate, service: VideoServiceDependency) -> Video
 @router.get("", response_model=VideoListResponse)
 def list_videos(
     service: VideoServiceDependency,
+    user: CurrentUserDependency,
+
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     video_status: Annotated[VideoStatus | None, Query(alias="status")] = None,
@@ -101,15 +129,19 @@ def list_videos(
 
 
 @router.get("/{video_id}", response_model=VideoRead)
-def get_video(video_id: int, service: VideoServiceDependency) -> VideoRead:
+def get_video(video_id: int, service: VideoServiceDependency, user: CurrentUserDependency) -> VideoRead:
     video = service.get(video_id)
+    require_video_access(video_id, user, service.repository)
+
     if video is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vidéo introuvable.")
     return video
 
 
 @router.post("/{video_id}/validate", response_model=VideoRead)
-async def validate_video(video_id: int, service: VideoValidationDependency) -> VideoRead:
+async def validate_video(video_id: int, service: VideoValidationDependency, user: CurrentUserDependency) -> VideoRead:
+    require_video_access(video_id, user, service.repository)
+
     try:
         return await service.validate(video_id)
     except VideoNotFoundError as exc:
@@ -119,7 +151,9 @@ async def validate_video(video_id: int, service: VideoValidationDependency) -> V
 
 
 @router.post("/{video_id}/sample", response_model=VideoSampleResponse)
-async def sample_video(video_id: int, service: VideoSamplingDependency) -> VideoSampleResponse:
+async def sample_video(video_id: int, service: VideoSamplingDependency, user: CurrentUserDependency) -> VideoSampleResponse:
+    require_video_access(video_id, user, service.repository)
+
     try:
         video, sample = await service.sample(video_id)
     except VideoSamplingNotFoundError as exc:
@@ -138,7 +172,9 @@ async def sample_video(video_id: int, service: VideoSamplingDependency) -> Video
 
 
 @router.post("/{video_id}/enqueue", response_model=EnqueueResponse, status_code=status.HTTP_202_ACCEPTED)
-def enqueue_video(video_id: int, service: VideoQueueDependency) -> EnqueueResponse:
+def enqueue_video(video_id: int, service: VideoQueueDependency, user: CurrentUserDependency) -> EnqueueResponse:
+    require_video_access(video_id, user, service.repository)
+
     try:
         return service.enqueue(video_id)
     except QueueVideoNotFoundError as exc:
@@ -154,7 +190,11 @@ def update_video_status(
     video_id: int,
     payload: VideoStatusUpdate,
     service: VideoServiceDependency,
+    user: CurrentUserDependency,
+
 ) -> VideoRead:
+    require_video_access(video_id, user, service.repository)
+
     try:
         video = service.update_status(video_id, payload.status, payload.error_message)
     except InvalidStatusTransition as exc:
@@ -166,7 +206,9 @@ def update_video_status(
 
 
 @router.delete("/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_video(video_id: int, service: VideoServiceDependency) -> Response:
+def delete_video(video_id: int, service: VideoServiceDependency, user: CurrentUserDependency) -> Response:
+    require_video_access(video_id, user, service.repository)
+
     if not service.delete(video_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vidéo introuvable.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
