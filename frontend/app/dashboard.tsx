@@ -3,7 +3,7 @@
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CircleOff,
   Clock3, Database, ExternalLink, FileImage, Film, ImagePlus, LoaderCircle,
-  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X, CalendarDays, MapPin, LogOut, UserRound, UsersRound
+  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X, CalendarDays, MapPin, LogOut, UserRound, UsersRound, Settings
 } from "lucide-react";
 import {
   DragEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo,
@@ -345,6 +345,8 @@ export default function Dashboard() {
           <a className="nav-item" href="#videos"><Film size={19} />Médias <span className="nav-count">{data.total}</span></a>
           <a className="nav-item" href="#import"><Upload size={19} />Importer</a>
           <a className="nav-item" href="#collecte"><Search size={19} />Collecte URL</a>
+          <a className="nav-item" href="/settings"><Settings size={19} />Paramètres</a>
+
           {session?.user.role === "SUPER_POWER" && <a className="nav-item" href="/admin"><UsersRound size={19} />Administration</a>}
 
         </nav>
