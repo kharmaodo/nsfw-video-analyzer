@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     oauth_google_client_id: str | None = None
     oauth_google_client_secret: str | None = None
     oauth_google_redirect_uri: str | None = None
+    oauth_frontend_success_url: str = "http://localhost:3000/login"
+    oauth_exchange_code_ttl_seconds: int = Field(default=60, ge=15, le=300)
     oauth_google_discovery_url: str = "https://accounts.google.com/.well-known/openid-configuration"
     bcrypt_rounds: int = Field(default=12, ge=10, le=15)
 
