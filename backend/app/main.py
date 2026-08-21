@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from redis.asyncio import Redis
@@ -7,13 +9,30 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.api.v1 import router as api_v1_router
 from app.core.config import get_settings
 from app.core.observability import ObservabilityMiddleware
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
+from app.repositories.user_repository import UserRepository
+from app.services.initial_user_service import InitialUserService
+from app.services.password_service import PasswordService
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    with SessionLocal() as session:
+        InitialUserService(
+            settings,
+            UserRepository(session),
+            PasswordService(rounds=settings.bcrypt_rounds),
+        ).ensure_super_power()
+    yield
+
 
 settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     debug=settings.app_debug,
     version="0.1.0",
+    lifespan=lifespan,
+
 )
 app.add_middleware(ObservabilityMiddleware, settings=settings)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.api_allowed_hosts))
