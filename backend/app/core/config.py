@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     jwt_secret_key: str | None = None
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
+    oauth_session_secret_key: str | None = None
+    oauth_google_client_id: str | None = None
+    oauth_google_client_secret: str | None = None
+    oauth_google_redirect_uri: str | None = None
+    oauth_google_discovery_url: str = "https://accounts.google.com/.well-known/openid-configuration"
     bcrypt_rounds: int = Field(default=12, ge=10, le=15)
 
     auth_login_max_failures: int = Field(default=5, ge=1, le=100)
