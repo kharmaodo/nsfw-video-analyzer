@@ -55,3 +55,16 @@ def get_current_user(
 
 CurrentUserDependency = Annotated[User, Depends(get_current_user)]
 
+
+
+def require_super_power(user: CurrentUserDependency) -> User:
+    if user.role.value != "SUPER_POWER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Privilège SUPER_POWER requis.",
+        )
+    return user
+
+
+SuperPowerDependency = Annotated[User, Depends(require_super_power)]
+
