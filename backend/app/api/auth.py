@@ -12,11 +12,22 @@ from app.db.session import get_db
 from app.repositories.user_repository import UserRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 
-from app.schemas.auth import AuthenticatedUserRead, LoginRequest, LoginResponse
+from app.schemas.auth import (
+    AccountUpdateRequest,
+    AuthenticatedUserRead,
+    LoginRequest,
+    LoginResponse,
+)
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 
 from app.services.authentication_service import AuthenticationError, AuthenticationService
 from app.services.audit_service import AuditService
+from app.services.account_service import (
+    AccountService,
+    CurrentPasswordInvalidError,
+    UsernameAlreadyExistsError,
+)
+
 
 from app.services.jwt_service import JwtService
 from app.services.password_service import PasswordService
@@ -54,6 +65,19 @@ LoginRateLimiterDependency = Annotated[
     Depends(get_login_rate_limiter),
 ]
 
+
+
+
+
+def get_account_service(db: Annotated[Session, Depends(get_db)]) -> AccountService:
+    settings = get_settings()
+    return AccountService(
+        UserRepository(db),
+        PasswordService(rounds=settings.bcrypt_rounds),
+    )
+
+
+AccountServiceDependency = Annotated[AccountService, Depends(get_account_service)]
 
 
 def get_audit_service(db: Annotated[Session, Depends(get_db)]) -> AuditService:
@@ -190,5 +214,56 @@ def list_audit_logs(
         size=size,
         total=total,
         pages=ceil(total / size) if total else 0,
+    )
+
+
+
+@router.patch("/me", response_model=LoginResponse)
+def update_current_user(
+    payload: AccountUpdateRequest,
+    user: CurrentUserDependency,
+    service: AccountServiceDependency,
+    audit_service: AuditServiceDependency,
+) -> LoginResponse:
+    try:
+        updated = service.update(
+            user,
+            current_password=payload.current_password,
+            username=payload.username,
+            new_password=payload.new_password,
+        )
+    except CurrentPasswordInvalidError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Mot de passe actuel invalide.",
+        ) from exc
+    except UsernameAlreadyExistsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    changed = []
+    if payload.username is not None:
+        changed.append("username")
+    if payload.new_password is not None:
+        changed.append("password")
+    audit_service.record(
+        actor=updated,
+        action="AUTH_ACCOUNT_UPDATED",
+        target_type="user",
+        target_id=str(updated.id),
+        details=",".join(changed),
+    )
+
+    settings = get_settings()
+    return LoginResponse(
+        access_token=JwtService(settings).create_access_token(updated),
+        expires_in=settings.jwt_access_token_expire_minutes * 60,
+        user=AuthenticatedUserRead(
+            id=updated.id,
+            username=updated.username,
+            role=updated.role,
+        ),
     )
 
