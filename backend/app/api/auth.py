@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.authentication import CurrentUserDependency
+
 from app.db.session import get_db
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import AuthenticatedUserRead, LoginRequest, LoginResponse
@@ -54,5 +56,15 @@ def login(
             username=result.user.username,
             role=result.user.role,
         ),
+    )
+
+
+
+@router.get("/me", response_model=AuthenticatedUserRead)
+def current_user(user: CurrentUserDependency) -> AuthenticatedUserRead:
+    return AuthenticatedUserRead(
+        id=user.id,
+        username=user.username,
+        role=user.role,
     )
 

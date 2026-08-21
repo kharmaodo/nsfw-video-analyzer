@@ -1,4 +1,6 @@
 import app.api.auth as auth_api
+from app.services.jwt_service import JwtService
+
 
 from app.core.config import Settings
 from app.db.models import User
@@ -59,4 +61,46 @@ def test_login_rejects_invalid_credentials(client, monkeypatch) -> None:
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Identifiants invalides."}
+
+
+
+def test_current_user_requires_valid_bearer_token(client, monkeypatch) -> None:
+    import app.core.authentication as authentication_module
+
+    settings = Settings(
+        bcrypt_rounds=10,
+        jwt_secret_key="0123456789abcdef0123456789abcdef",
+    )
+    monkeypatch.setattr(authentication_module, "get_settings", lambda: settings)
+
+    session_generator = app.dependency_overrides[get_db]()
+    session = next(session_generator)
+    try:
+        user = UserRepository(session).create(
+            User(
+                username="guest",
+                password_hash=PasswordService(rounds=4).hash("mot-de-passe"),
+            )
+        )
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    token = JwtService(settings).create_access_token(user)
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "guest"
+
+
+def test_current_user_rejects_missing_token(client) -> None:
+    response = client.get("/auth/me")
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Session expirée."}
 
