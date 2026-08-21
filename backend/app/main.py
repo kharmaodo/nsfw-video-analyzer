@@ -5,11 +5,16 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from redis.asyncio import Redis
 from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.v1 import router as api_v1_router
 from app.api.auth import router as auth_router
 
 from app.core.config import get_settings
+from app.services.google_oidc_configuration import (
+    GoogleOidcConfiguration,
+    GoogleOidcConfigurationError,
+)
 from app.core.jwt_authentication_middleware import JwtAuthenticationMiddleware
 
 from app.core.observability import ObservabilityMiddleware
@@ -39,6 +44,19 @@ app = FastAPI(
 
 )
 app.add_middleware(JwtAuthenticationMiddleware)
+
+try:
+    google_oidc_configuration = GoogleOidcConfiguration.from_settings(settings)
+except GoogleOidcConfigurationError:
+    google_oidc_configuration = None
+
+if google_oidc_configuration is not None:
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=google_oidc_configuration.session_secret_key,
+        same_site="lax",
+        https_only=settings.app_env not in {"development", "test"},
+    )
 
 app.add_middleware(ObservabilityMiddleware, settings=settings)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.api_allowed_hosts))
