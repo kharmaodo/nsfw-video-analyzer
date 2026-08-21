@@ -31,11 +31,13 @@ class VideoService:
     def __init__(self, repository: VideoRepository) -> None:
         self.repository = repository
 
-    def create(self, payload: VideoCreate) -> Video:
+    def create(self, payload: VideoCreate, owner_user_id: int | None = None) -> Video:
         video = Video(
             title=payload.title.strip(),
             page_url=str(payload.page_url),
             video_url=str(payload.video_url),
+            owner_user_id=owner_user_id,
+
         )
         return self.repository.create(video)
 
@@ -49,12 +51,16 @@ class VideoService:
         size: int,
         status: VideoStatus | None,
         search: str | None,
+        owner_user_id: int | None = None,
+
     ) -> VideoListResponse:
         items, total = self.repository.list(
             offset=(page - 1) * size,
             limit=size,
             status=status,
             search=search,
+            owner_user_id=owner_user_id,
+
         )
         return VideoListResponse(
             items=items,

@@ -23,13 +23,15 @@ class VideoRepository:
         *,
         page_url: str,
         candidates: list[tuple[str, str]],
+        owner_user_id: int | None = None,
+
     ) -> tuple[list[Video], int]:
         urls = [video_url for _, video_url in candidates]
         existing = set(
             self.session.scalars(select(Video.video_url).where(Video.video_url.in_(urls))).all()
         ) if urls else set()
         created = [
-            Video(title=title, page_url=page_url, video_url=video_url)
+            Video(title=title, page_url=page_url, video_url=video_url, owner_user_id=owner_user_id)
             for title, video_url in candidates
             if video_url not in existing
         ]
@@ -49,10 +51,15 @@ class VideoRepository:
         limit: int,
         status: VideoStatus | None = None,
         search: str | None = None,
+        owner_user_id: int | None = None,
+
     ) -> tuple[list[Video], int]:
         filters = []
         if status is not None:
             filters.append(Video.status == status)
+        if owner_user_id is not None:
+            filters.append(Video.owner_user_id == owner_user_id)
+
         if search:
             pattern = f"%{search.strip()}%"
             filters.append(or_(Video.title.ilike(pattern), Video.video_url.ilike(pattern)))
