@@ -15,6 +15,19 @@ class Settings(BaseSettings):
     app_name: str = "NSFW Video Analyzer"
     app_env: str = "development"
     app_debug: bool = False
+    jwt_secret_key: str | None = None
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = Field(default=30, ge=5, le=1440)
+    bcrypt_rounds: int = Field(default=12, ge=10, le=15)
+
+    auth_login_max_failures: int = Field(default=5, ge=1, le=100)
+    auth_login_window_seconds: int = Field(default=900, ge=1, le=86400)
+    auth_login_block_seconds: int = Field(default=900, ge=1, le=86400)
+    auth_global_max_attempts: int = Field(default=100, ge=1, le=100000)
+    auth_global_window_seconds: int = Field(default=60, ge=1, le=86400)
+
+    initial_super_power_username: str | None = None
+    initial_super_power_password: str | None = None
     database_url: str = "sqlite:///./storage/database/videos.db"
     sqlite_busy_timeout_ms: int = Field(default=5000, ge=1000, le=60000)
     scraper_connect_timeout_seconds: float = Field(default=5, gt=0, le=30)
