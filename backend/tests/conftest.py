@@ -14,8 +14,23 @@ from app.core.config import Settings
 from app.db.base import Base
 from app.db.models import User, UserRole
 
+from app.api.auth import get_login_rate_limiter
+from app.services.login_rate_limiter import LoginRateLimitState
+
 from app.db.session import build_engine, get_db
 from app.main import app
+
+
+class AllowLoginRateLimiter:
+    async def check(self, _client_ip, _settings):
+        return LoginRateLimitState.ALLOWED
+
+    async def record_failure(self, _client_ip, _settings):
+        return LoginRateLimitState.ALLOWED
+
+    async def reset_failures(self, _client_ip, _settings):
+        return None
+
 
 
 @pytest.fixture
@@ -64,6 +79,8 @@ def client(tmp_path, monkeypatch) -> TestClient:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_login_rate_limiter] = lambda: AllowLoginRateLimiter()
+
     with TestClient(app) as test_client:
         test_client.headers["Authorization"] = f"Bearer {access_token}"
 
