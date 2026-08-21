@@ -7,9 +7,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.core.jwt_authentication_middleware as jwt_authentication_middleware
+import app.core.authentication as authentication_module
+
 from app.core.config import Settings
 
 from app.db.base import Base
+from app.db.models import User, UserRole
+
 from app.db.session import build_engine, get_db
 from app.main import app
 
@@ -22,10 +26,14 @@ def client(tmp_path, monkeypatch) -> TestClient:
         jwt_secret_key="0123456789abcdef0123456789abcdef",
     )
     monkeypatch.setattr(
+
         jwt_authentication_middleware,
         "get_settings",
         lambda: auth_settings,
     )
+    monkeypatch.setattr(authentication_module, "get_settings", lambda: auth_settings)
+
+
     access_token = jwt.encode(
         {
             "sub": "999999",
@@ -39,6 +47,17 @@ def client(tmp_path, monkeypatch) -> TestClient:
 
     Base.metadata.create_all(engine)
     testing_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with testing_session() as session:
+        session.add(
+            User(
+                id=999999,
+                username="test-user",
+                password_hash="not-used-by-jwt-tests",
+                role=UserRole.SUPER_POWER,
+            )
+        )
+        session.commit()
+
 
     def override_get_db():
         with testing_session() as session:

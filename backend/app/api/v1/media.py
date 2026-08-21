@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.videos import VideoQueueDependency, VideoServiceDependency
 from app.core.config import get_settings
-from app.db.models import VideoStatus
+from app.core.authentication import CurrentUserDependency
+
+from app.db.models import UserRole, VideoStatus
 from app.db.session import get_db
 from app.repositories.video_repository import VideoRepository
 from app.schemas.jobs import EnqueueResponse
@@ -14,6 +16,11 @@ from app.schemas.media import MediaUploadFailure, MediaUploadResponse
 from app.schemas.video import VideoListResponse, VideoRead
 from app.services.media_upload import LocalMediaUploadService, MediaUploadError
 from app.services.media_upload_rate_limiter import UploadRateLimiter
+from app.services.media_authorization_service import (
+    MediaAccessDeniedError,
+    MediaAuthorizationService,
+)
+
 from app.services.video_queue_service import (
     QueueUnavailableError,
     QueueVideoNotFoundError,
@@ -25,6 +32,19 @@ DbSession = Annotated[Session, Depends(get_db)]
 upload_rate_limiter = UploadRateLimiter()
 
 
+def require_media_access(media_id: int, user: CurrentUserDependency, repository: VideoRepository) -> None:
+    media = repository.get(media_id)
+    if media is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Média introuvable.")
+    require_media_access(media_id, user, service.repository)
+
+    try:
+        MediaAuthorizationService.require_access(user, media)
+    except MediaAccessDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Média introuvable.") from exc
+
+
+
 @router.post(
     "/uploads",
     response_model=MediaUploadResponse,
@@ -34,6 +54,8 @@ async def upload_media(
     files: Annotated[list[UploadFile], File(...)],
     db: DbSession,
     request: Request,
+    user: CurrentUserDependency,
+
 ) -> MediaUploadResponse:
     settings = get_settings()
     content_length = request.headers.get("content-length")
@@ -49,7 +71,7 @@ async def upload_media(
             )
 
     client_key = request.client.host if request.client else "unknown"
-    if not upload_rate_limiter.allow(
+    if user.role != UserRole.SUPER_POWER and not upload_rate_limiter.allow(
         client_key,
         maximum_requests=settings.media_upload_rate_limit_requests,
         window_seconds=settings.media_upload_rate_limit_window_seconds,
@@ -74,6 +96,8 @@ async def upload_media(
         video = None
         try:
             video = await service.store(file)
+            video.owner_user_id = user.id
+
             created.append(repository.create(video))
         except IntegrityError:
             if video is not None:
@@ -100,7 +124,11 @@ async def upload_media(
 def requeue_media(
     media_id: int,
     service: VideoQueueDependency,
+    user: CurrentUserDependency,
+
 ) -> EnqueueResponse:
+    require_media_access(media_id, user, service.repository)
+
     try:
         return service.requeue(media_id)
     except QueueVideoNotFoundError as exc:
@@ -122,6 +150,8 @@ def requeue_media(
 @router.get("", response_model=VideoListResponse)
 def list_media(
     service: VideoServiceDependency,
+    user: CurrentUserDependency,
+
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     media_status: Annotated[VideoStatus | None, Query(alias="status")] = None,
@@ -132,12 +162,16 @@ def list_media(
         size=size,
         status=media_status,
         search=search,
+        owner_user_id=MediaAuthorizationService.visible_owner_id(user),
+
     )
 
 
 @router.get("/{media_id}", response_model=VideoRead)
-def get_media(media_id: int, service: VideoServiceDependency) -> VideoRead:
+def get_media(media_id: int, service: VideoServiceDependency, user: CurrentUserDependency) -> VideoRead:
     media = service.get(media_id)
+    require_media_access(media_id, user, service.repository)
+
     if media is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -154,7 +188,11 @@ def get_media(media_id: int, service: VideoServiceDependency) -> VideoRead:
 def enqueue_media(
     media_id: int,
     service: VideoQueueDependency,
+    user: CurrentUserDependency,
+
 ) -> EnqueueResponse:
+    require_media_access(media_id, user, service.repository)
+
     try:
         return service.enqueue(media_id)
     except QueueVideoNotFoundError as exc:
