@@ -99,7 +99,7 @@ def test_current_user_requires_valid_bearer_token(client, monkeypatch) -> None:
 
 
 def test_current_user_rejects_missing_token(client) -> None:
-    response = client.get("/auth/me")
+    response = client.get("/auth/me", headers={"Authorization": ""})
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Session expirée."}
