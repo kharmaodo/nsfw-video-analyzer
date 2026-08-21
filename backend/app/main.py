@@ -7,6 +7,8 @@ from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1 import router as api_v1_router
+from app.api.auth import router as auth_router
+
 from app.core.config import get_settings
 from app.core.observability import ObservabilityMiddleware
 from app.db.session import SessionLocal, engine
@@ -37,6 +39,8 @@ app = FastAPI(
 app.add_middleware(ObservabilityMiddleware, settings=settings)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.api_allowed_hosts))
 app.include_router(api_v1_router)
+app.include_router(auth_router)
+
 
 
 @app.get("/health", tags=["system"])
