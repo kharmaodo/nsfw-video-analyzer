@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import User
@@ -31,4 +31,22 @@ class UserRepository:
         self.session.refresh(user)
         return user
 
+
+
+
+    def list(self, *, offset: int, limit: int) -> tuple[list[User], int]:
+        items = list(
+            self.session.scalars(
+                select(User)
+                .order_by(User.created_at.desc(), User.id.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
+        total = self.session.scalar(select(func.count(User.id))) or 0
+        return items, total
+
+    def delete(self, user: User) -> None:
+        self.session.delete(user)
+        self.session.commit()
 
