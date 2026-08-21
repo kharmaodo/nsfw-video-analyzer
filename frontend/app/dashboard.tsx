@@ -3,7 +3,7 @@
 import {
   Activity, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CircleOff,
   Clock3, Database, ExternalLink, FileImage, Film, ImagePlus, LoaderCircle,
-  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X,CalendarDays, MapPin
+  Menu, Play, RefreshCw, Search, ShieldCheck, ShieldX, Sparkles, Upload, X, CalendarDays, MapPin, LogOut, UserRound
 } from "lucide-react";
 import {
   DragEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo,
@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import { api } from "./api-client";
-import { readSession, redirectToExpiredSessionLogin, redirectToLogin } from "./auth-session";
+import { clearSession, readSession, redirectToExpiredSessionLogin, redirectToLogin } from "./auth-session";
 
 
 type VideoStatus =
@@ -92,6 +92,12 @@ function MediaMetadata({ media }: { media: Video }) {
 
   if (!media.metadata_title && !date && !hasGps) return null;
 
+  function logout() {
+    clearSession();
+    redirectToLogin();
+  }
+
+
   return (
     <span className="media-metadata">
       {media.metadata_title && <span className="metadata-chip">Titre intégré</span>}
@@ -105,6 +111,12 @@ function StatusBadge({ status }: { status: VideoStatus }) {
     : status === "SAMPLED_NSFW" ? ShieldX
       : status === "ERROR" || status === "REJECTED" ? CircleOff
         : activeStatuses.includes(status) ? LoaderCircle : CheckCircle2;
+  function logout() {
+    clearSession();
+    redirectToLogin();
+  }
+
+
   return (
     <span className={`status-badge status-${status.toLowerCase()}`}>
       <Icon size={14} className={activeStatuses.includes(status) ? "spin" : ""} />
@@ -129,6 +141,8 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [queueingSelection, setQueueingSelection] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const session = readSession();
+
 
   useEffect(() => {
     if (!readSession()) redirectToLogin();
@@ -315,6 +329,12 @@ export default function Dashboard() {
     );
   }
 
+  function logout() {
+    clearSession();
+    redirectToLogin();
+  }
+
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileMenu ? "sidebar-open" : ""}`}>
@@ -338,6 +358,12 @@ export default function Dashboard() {
           <button className="menu-button" onClick={() => setMobileMenu(true)} aria-label="Ouvrir le menu"><Menu /></button>
           <div><p className="eyebrow">Centre de contrôle</p><h1>Analyse des médias</h1></div>
           <div className="topbar-actions">
+            <div className="user-session">
+              <span className="user-avatar"><UserRound size={15} /></span>
+              <span><strong>{session?.user.username ?? "Session"}</strong><small>{session?.user.role === "SUPER_POWER" ? "SUPER_POWER" : "GUEST"}</small></span>
+            </div>
+            <button className="logout-button" onClick={logout} aria-label="Se déconnecter"><LogOut size={16} /><span>Déconnexion</span></button>
+
             <span className="refresh-copy"><Clock3 size={15} />{lastRefresh ? `Actualisé à ${lastRefresh.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "Connexion…"}</span>
             <button className="icon-button" onClick={() => loadVideos()} aria-label="Actualiser"><RefreshCw size={18} className={loading ? "spin" : ""} /></button>
           </div>
