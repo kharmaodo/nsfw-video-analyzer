@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import AuditLog
@@ -31,4 +31,12 @@ class AuditLogRepository:
                 .limit(limit)
             ).all()
         )
+
+
+
+    def count_by_actor(self, actor_user_id: int | None) -> int:
+        query = select(func.count(AuditLog.id))
+        if actor_user_id is not None:
+            query = query.where(AuditLog.actor_user_id == actor_user_id)
+        return self.session.scalar(query) or 0
 

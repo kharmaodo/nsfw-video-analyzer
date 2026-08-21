@@ -1,6 +1,8 @@
+from math import ceil
+
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -11,6 +13,8 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 
 from app.schemas.auth import AuthenticatedUserRead, LoginRequest, LoginResponse
+from app.schemas.audit import AuditLogListResponse, AuditLogRead
+
 from app.services.authentication_service import AuthenticationError, AuthenticationService
 from app.services.audit_service import AuditService
 
@@ -157,5 +161,34 @@ def current_user(user: CurrentUserDependency) -> AuthenticatedUserRead:
         id=user.id,
         username=user.username,
         role=user.role,
+    )
+
+
+
+@router.get("/audit-logs", response_model=AuditLogListResponse)
+def list_audit_logs(
+    user: CurrentUserDependency,
+    audit_service: AuditServiceDependency,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> AuditLogListResponse:
+    actor_user_id = (
+        None
+        if user.role.value == "SUPER_POWER"
+        else user.id
+    )
+    repository = audit_service.repository
+    total = repository.count_by_actor(actor_user_id)
+    items = repository.list_by_actor(
+        actor_user_id,
+        offset=(page - 1) * size,
+        limit=size,
+    )
+    return AuditLogListResponse(
+        items=[AuditLogRead.model_validate(item) for item in items],
+        page=page,
+        size=size,
+        total=total,
+        pages=ceil(total / size) if total else 0,
     )
 
