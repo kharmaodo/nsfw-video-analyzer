@@ -7,6 +7,16 @@ import { ArrowLeft, KeyRound, Save, UserRound } from "lucide-react";
 import { api } from "../api-client";
 import { readSession, redirectToLogin, saveSession } from "../auth-session";
 
+type AuditLog = {
+  id: number;
+  action: string;
+  ip_address: string | null;
+  created_at: string;
+};
+
+type AuditPage = { items: AuditLog[]; total: number };
+
+
 type UpdateResponse = {
   access_token: string;
   expires_in: number;
@@ -21,6 +31,8 @@ export default function SettingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+
 
   useEffect(() => {
     const session = readSession();
@@ -29,6 +41,10 @@ export default function SettingsPage() {
       return;
     }
     setUsername(session.user.username);
+    void api<AuditPage>("/auth/audit-logs?page=1&size=12")
+      .then((result) => setLogs(result.items))
+      .catch(() => setLogs([]));
+
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -91,6 +107,13 @@ export default function SettingsPage() {
           <input id="settings-new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" />
           <button disabled={submitting}><Save size={16} />{submitting ? "Enregistrement…" : "Enregistrer"}</button>
         </form>
+        <section className="settings-audit" aria-labelledby="settings-audit-title">
+          <h2 id="settings-audit-title">Activité récente</h2>
+          {logs.length === 0
+            ? <p>Aucun événement récent.</p>
+            : <ul>{logs.map((log) => <li key={log.id}><span><strong>{log.action}</strong><small>{new Date(log.created_at).toLocaleString("fr-FR")}</small></span><em>{log.ip_address ?? "—"}</em></li>)}</ul>}
+        </section>
+
       </section>
     </main>
   );
