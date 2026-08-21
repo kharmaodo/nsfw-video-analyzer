@@ -5,7 +5,11 @@ from fastapi import UploadFile
 from PIL import Image
 
 from app.core.config import Settings
-from app.db.models import MediaType, VideoStatus
+from app.db.models import MediaType, User, UserRole, VideoStatus
+from app.db.session import get_db
+from app.main import app
+from app.services.jwt_service import JwtService
+
 from app.services.media_upload import LocalMediaUploadService, MediaUploadError
 from app.api.v1 import media as media_api
 
@@ -14,6 +18,34 @@ def image_bytes(image_format: str = "PNG") -> bytes:
     output = BytesIO()
     Image.new("RGB", (12, 8), "white").save(output, format=image_format)
     return output.getvalue()
+
+
+def guest_headers() -> dict[str, str]:
+    settings = Settings(
+        bcrypt_rounds=10,
+        jwt_secret_key="0123456789abcdef0123456789abcdef",
+    )
+    session_generator = app.dependency_overrides[get_db]()
+    session = next(session_generator)
+    try:
+        user = User(
+            id=700001,
+            username="rate-limited-guest",
+            password_hash="hash",
+            role=UserRole.GUEST,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    token = JwtService(settings).create_access_token(user)
+    return {"Authorization": f"Bearer {token}"}
+
 
 
 @pytest.mark.asyncio
@@ -147,6 +179,8 @@ def test_upload_endpoint_reports_duplicate_image_friendly(
         ),
     )
 
+    headers = guest_headers()
+
     first = client.post(
         "/api/v1/media/uploads",
         files={"files": ("already-imported.png", image_bytes(), "image/png")},
@@ -214,14 +248,20 @@ def test_upload_endpoint_rate_limits_client(
     )
     monkeypatch.setattr(media_api, "upload_rate_limiter", media_api.UploadRateLimiter())
 
+    headers = guest_headers()
+
     first = client.post(
         "/api/v1/media/uploads",
+        headers=headers,
+
         files={"files": ("first.png", image_bytes(), "image/png")},
     )
     assert first.status_code == 201
 
     second = client.post(
         "/api/v1/media/uploads",
+        headers=headers,
+
         files={"files": ("second.png", image_bytes("JPEG"), "image/jpeg")},
     )
 
@@ -271,6 +311,34 @@ def image_bytes_with_metadata() -> bytes:
         exif=exif,
     )
     return output.getvalue()
+
+
+def guest_headers() -> dict[str, str]:
+    settings = Settings(
+        bcrypt_rounds=10,
+        jwt_secret_key="0123456789abcdef0123456789abcdef",
+    )
+    session_generator = app.dependency_overrides[get_db]()
+    session = next(session_generator)
+    try:
+        user = User(
+            id=700001,
+            username="rate-limited-guest",
+            password_hash="hash",
+            role=UserRole.GUEST,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    finally:
+        try:
+            next(session_generator)
+        except StopIteration:
+            pass
+
+    token = JwtService(settings).create_access_token(user)
+    return {"Authorization": f"Bearer {token}"}
+
 
 
 @pytest.mark.asyncio

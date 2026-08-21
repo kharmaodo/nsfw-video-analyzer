@@ -35,8 +35,7 @@ upload_rate_limiter = UploadRateLimiter()
 def require_media_access(media_id: int, user: CurrentUserDependency, repository: VideoRepository) -> None:
     media = repository.get(media_id)
     if media is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Média introuvable.")
-    require_media_access(media_id, user, service.repository)
+        return
 
     try:
         MediaAuthorizationService.require_access(user, media)
