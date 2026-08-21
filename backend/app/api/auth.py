@@ -8,8 +8,12 @@ from app.core.authentication import CurrentUserDependency
 
 from app.db.session import get_db
 from app.repositories.user_repository import UserRepository
+from app.repositories.audit_log_repository import AuditLogRepository
+
 from app.schemas.auth import AuthenticatedUserRead, LoginRequest, LoginResponse
 from app.services.authentication_service import AuthenticationError, AuthenticationService
+from app.services.audit_service import AuditService
+
 from app.services.jwt_service import JwtService
 from app.services.password_service import PasswordService
 from app.services.login_rate_limiter import (
@@ -46,6 +50,14 @@ LoginRateLimiterDependency = Annotated[
     Depends(get_login_rate_limiter),
 ]
 
+
+
+def get_audit_service(db: Annotated[Session, Depends(get_db)]) -> AuditService:
+    return AuditService(AuditLogRepository(db))
+
+
+AuditServiceDependency = Annotated[AuditService, Depends(get_audit_service)]
+
 AuthenticationServiceDependency = Annotated[
     AuthenticationService,
     Depends(get_authentication_service),
@@ -59,6 +71,8 @@ async def login(
 
     service: AuthenticationServiceDependency,
     limiter: LoginRateLimiterDependency,
+    audit_service: AuditServiceDependency,
+
 
 ) -> LoginResponse:
     settings = get_settings()
@@ -80,6 +94,13 @@ async def login(
     try:
         result = service.authenticate(payload.username, payload.password)
     except AuthenticationError as exc:
+        audit_service.record(
+            actor=None,
+            action="AUTH_LOGIN_FAILURE",
+            target_type="auth",
+            ip_address=client_ip,
+        )
+
         try:
             failure_state = await limiter.record_failure(client_ip, settings)
         except LoginRateLimiterUnavailableError as limiter_exc:
@@ -107,6 +128,15 @@ async def login(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentification temporairement indisponible.",
         ) from exc
+
+
+    audit_service.record(
+        actor=result.user,
+        action="AUTH_LOGIN_SUCCESS",
+        target_type="user",
+        target_id=str(result.user.id),
+        ip_address=client_ip,
+    )
 
 
     return LoginResponse(
