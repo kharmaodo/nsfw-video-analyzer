@@ -1,3 +1,5 @@
+from app.core.config import get_settings
+
 from types import SimpleNamespace
 
 from fastapi.responses import JSONResponse
@@ -58,7 +60,13 @@ class FakeAuditService:
         return None
 
 
-def test_google_oauth_routes_and_one_time_exchange() -> None:
+def test_google_oauth_routes_and_one_time_exchange(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "0123456789abcdef0123456789abcdef",
+    )
+    get_settings.cache_clear()
+
     store = FakeExchangeStore()
 
     app.dependency_overrides[get_google_oidc_client] = lambda: FakeGoogleClient()
@@ -96,3 +104,5 @@ def test_google_oauth_routes_and_one_time_exchange() -> None:
             assert reused.json()["detail"] == "Code OAuth invalide ou expiré."
     finally:
         app.dependency_overrides.clear()
+        get_settings.cache_clear()
+

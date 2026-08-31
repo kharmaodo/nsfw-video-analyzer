@@ -15,6 +15,7 @@ dependencies = [
   "beautifulsoup4>=4.12,<5",
   "bcrypt>=4.2,<5",
   "PyJWT>=2.10,<3",
+  "PyJWT>=2.10,<3",
   "celery[redis]>=5.4,<6",
   "exifread>=3,<4",
   "fastapi>=0.115,<1",

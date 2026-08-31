@@ -21,9 +21,9 @@ class InitialUserService:
 
     def ensure_super_power(self) -> User | None:
         username = (self.settings.initial_super_power_username or "").strip()
-        password = self.settings.initial_super_power_password
+        password = (self.settings.initial_super_power_password or "").strip()
 
-        if not username and password is None:
+        if not username and not password:
             return None
         if not username or not password:
             raise InitialUserConfigurationError(
