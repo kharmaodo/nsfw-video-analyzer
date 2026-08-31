@@ -13,6 +13,11 @@ type LoginResponse = {
   user: { id: number; username: string; role: "GUEST" | "SUPER_POWER" };
 };
 
+type OAuthProviderRead = {
+  provider: string;
+};
+
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,6 +26,8 @@ export default function LoginPage() {
   const [visiblePassword, setVisiblePassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enabledOAuthProviders, setEnabledOAuthProviders] = useState<string[] | null>(null);
+
   const expired = searchParams.get("reason") === "expired";
   const oauthError = searchParams.get("oauth_error");
 
@@ -28,6 +35,30 @@ export default function LoginPage() {
   const processedOAuthCode = useRef<string | null>(null);
   const [oauthExchanging, setOauthExchanging] = useState(false);
   const backendOrigin = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
+  const googleEnabled = enabledOAuthProviders?.includes("google") ?? false;
+  const facebookEnabled = enabledOAuthProviders?.includes("facebook") ?? false;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadOAuthProviders(): Promise<void> {
+      try {
+        const response = await fetch("/api/backend/auth/oauth/providers");
+        const body = (await response.json().catch(() => [])) as OAuthProviderRead[];
+        if (active && response.ok && Array.isArray(body)) {
+          setEnabledOAuthProviders(body.map(({ provider }) => provider));
+        }
+      } catch {
+        if (active) setEnabledOAuthProviders([]);
+      }
+    }
+
+    void loadOAuthProviders();
+    return () => {
+      active = false;
+    };
+  }, []);
+
 
   useEffect(() => {
     if (!oauthCode || processedOAuthCode.current === oauthCode) return;
@@ -146,6 +177,7 @@ export default function LoginPage() {
           type="button"
           className="login-submit"
           onClick={startGoogleLogin}
+          hidden={!googleEnabled}
           disabled={submitting || oauthExchanging}
         >
           Continuer avec Google
@@ -155,6 +187,7 @@ export default function LoginPage() {
           type="button"
           className="login-submit"
           onClick={startFacebookLogin}
+          hidden={!facebookEnabled}
           disabled={submitting || oauthExchanging}
         >
           Continuer avec Facebook
