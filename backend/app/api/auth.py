@@ -30,6 +30,7 @@ from app.schemas.auth import (
     LoginResponse,
     OAuthExchangeRequest,
     OAuthProviderRead,
+    OAuthLinkStartResponse,
 )
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 
@@ -51,6 +52,7 @@ from app.services.google_oidc_configuration import (
     GoogleOidcConfigurationError,
 )
 from app.services.oauth_exchange_code_store import OAuthExchangeCodeStore
+from app.services.oauth_link_code_store import OAuthLinkCodeStore
 from app.services.facebook_oauth_configuration import (
     FacebookOAuthConfiguration,
     FacebookOAuthConfigurationError,
@@ -154,6 +156,11 @@ def get_oauth_identity_service(
     )
 
 
+def get_oauth_link_code_store() -> OAuthLinkCodeStore:
+    return OAuthLinkCodeStore(get_settings())
+
+
+
 def get_oauth_exchange_code_store() -> OAuthExchangeCodeStore:
     return OAuthExchangeCodeStore(get_settings())
 
@@ -172,6 +179,12 @@ OAuthIdentityServiceDependency = Annotated[
     OAuthIdentityService,
     Depends(get_oauth_identity_service),
 ]
+OAuthLinkCodeStoreDependency = Annotated[
+    OAuthLinkCodeStore,
+    Depends(get_oauth_link_code_store),
+]
+
+
 OAuthExchangeCodeStoreDependency = Annotated[
     OAuthExchangeCodeStore,
     Depends(get_oauth_exchange_code_store),
@@ -408,6 +421,38 @@ def update_current_user(
             role=updated.role,
         ),
     )
+
+
+
+async def issue_oauth_link_code(
+    provider: str,
+    user: CurrentUserDependency,
+    store: OAuthLinkCodeStore,
+) -> OAuthLinkStartResponse:
+    try:
+        code = await store.issue(user_id=user.id, provider=provider)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liaison OAuth temporairement indisponible.",
+        ) from exc
+    return OAuthLinkStartResponse(code=code)
+
+
+@router.post("/oauth/google/link", response_model=OAuthLinkStartResponse)
+async def create_google_link_code(
+    user: CurrentUserDependency,
+    store: OAuthLinkCodeStoreDependency,
+) -> OAuthLinkStartResponse:
+    return await issue_oauth_link_code("google", user, store)
+
+
+@router.post("/oauth/facebook/link", response_model=OAuthLinkStartResponse)
+async def create_facebook_link_code(
+    user: CurrentUserDependency,
+    store: OAuthLinkCodeStoreDependency,
+) -> OAuthLinkStartResponse:
+    return await issue_oauth_link_code("facebook", user, store)
 
 
 

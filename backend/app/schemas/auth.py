@@ -22,6 +22,11 @@ class LoginResponse(BaseModel):
 
 
 
+class OAuthLinkStartResponse(BaseModel):
+    code: str
+
+
+
 class OAuthProviderRead(BaseModel):
     provider: str
 
