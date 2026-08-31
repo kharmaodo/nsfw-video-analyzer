@@ -22,6 +22,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const expired = searchParams.get("reason") === "expired";
+  const oauthError = searchParams.get("oauth_error");
+
   const oauthCode = searchParams.get("oauth_code");
   const processedOAuthCode = useRef<string | null>(null);
   const [oauthExchanging, setOauthExchanging] = useState(false);
@@ -118,6 +120,11 @@ export default function LoginPage() {
         <h1 id="login-title">Connexion sécurisée</h1>
         <p className="login-intro">Accédez à vos médias et à leurs résultats d’analyse.</p>
         {expired && <p className="login-message">Session expirée. Connectez-vous à nouveau.</p>}
+        {oauthError && (
+          <p className="login-error" role="alert">
+            La connexion Google a été annulée ou refusée. Réessayez.
+          </p>
+        )}
         {error && <p className="login-error" role="alert">{error}</p>}
         <form onSubmit={submit} className="login-form">
           <label htmlFor="username"><UserRound size={15} />Nom d’utilisateur</label>
