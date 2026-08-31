@@ -68,6 +68,50 @@ class OAuthIdentityService:
         session.refresh(user)
         return user
 
+    def link(self, user: User, identity: OAuthIdentity) -> User:
+        provider = identity.provider.strip().lower()
+        subject = identity.subject.strip()
+        if not provider or not subject:
+            raise OAuthIdentityError(
+                "Fournisseur OAuth ou identifiant externe invalide."
+            )
+
+        existing = self.oauth_accounts.get_by_provider_subject(provider, subject)
+        if existing is not None:
+            if existing.user_id == user.id:
+                return user
+            raise OAuthIdentityError(
+                "Cette identité OAuth est déjà liée à un autre compte."
+            )
+
+        existing_provider = self.oauth_accounts.get_by_user_provider(
+            user.id,
+            provider,
+        )
+        if existing_provider is not None:
+            raise OAuthIdentityError(
+                "Ce fournisseur OAuth est déjà lié à ce compte."
+            )
+
+        session = self.users.session
+        try:
+            session.add(
+                OAuthAccount(
+                    user_id=user.id,
+                    provider=provider,
+                    provider_subject=subject,
+                    provider_email=identity.email,
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+        return user
+
+
+
     def _available_username(
         self,
         identity: OAuthIdentity,
