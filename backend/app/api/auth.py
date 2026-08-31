@@ -203,6 +203,21 @@ def oauth_login_response(user, settings) -> LoginResponse:
     )
 
 
+def oauth_frontend_link_url(
+    settings,
+    provider: str,
+    outcome: str,
+) -> str:
+    separator = "&" if "?" in settings.oauth_frontend_link_success_url else "?"
+    return "{}{}oauth_link={}&provider={}".format(
+        settings.oauth_frontend_link_success_url,
+        separator,
+        quote(outcome),
+        quote(provider),
+    )
+
+
+
 def oauth_frontend_error_url(settings, error: str) -> str:
     separator = "&" if "?" in settings.oauth_frontend_success_url else "?"
     return "{}{}oauth_error={}".format(
@@ -456,6 +471,35 @@ async def create_facebook_link_code(
 
 
 
+async def begin_oauth_link(
+    provider: str,
+    request: Request,
+    code: str,
+    client: Any,
+    store: OAuthLinkCodeStore,
+):
+    try:
+        intent = await store.consume(code)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liaison OAuth temporairement indisponible.",
+        ) from exc
+
+    if intent is None or intent.provider != provider:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Code de liaison OAuth invalide ou expiré.",
+        )
+
+    request.session["oauth_link"] = {
+        "user_id": intent.user_id,
+        "provider": provider,
+    }
+    return await client.authorize_redirect(request)
+
+
+
 async def complete_oauth_login(
     provider: str,
     request: Request,
@@ -465,15 +509,56 @@ async def complete_oauth_login(
     audit_service: AuditService,
 ) -> RedirectResponse:
     settings = get_settings()
+    link_context = request.session.pop("oauth_link", None)
+    link_user_id: int | None = None
+
+    if link_context is not None:
+        if not isinstance(link_context, dict):
+            return RedirectResponse(
+                oauth_frontend_link_url(settings, provider, "error")
+            )
+        try:
+            context_provider = str(link_context["provider"]).strip().lower()
+            link_user_id = int(link_context["user_id"])
+        except (KeyError, TypeError, ValueError):
+            return RedirectResponse(
+                oauth_frontend_link_url(settings, provider, "error")
+            )
+        if context_provider != provider or link_user_id <= 0:
+            return RedirectResponse(
+                oauth_frontend_link_url(settings, provider, "error")
+            )
+
     try:
         identity = await client.fetch_identity(request)
-        user = identity_service.resolve(identity)
+        user = (
+            identity_service.link_by_user_id(link_user_id, identity)
+            if link_user_id is not None
+            else identity_service.resolve(identity)
+        )
     except (OAuthError, OAuthIdentityError):
+        if link_user_id is not None:
+            return RedirectResponse(
+                oauth_frontend_link_url(settings, provider, "error")
+            )
         return RedirectResponse(
             oauth_frontend_error_url(
                 settings,
                 f"{provider}_auth_failed",
             )
+        )
+
+    client_ip = request.client.host if request.client else "unknown"
+    if link_user_id is not None:
+        audit_service.record(
+            actor=user,
+            action=f"AUTH_OAUTH_{provider.upper()}_LINK_SUCCESS",
+            target_type="user",
+            target_id=str(user.id),
+            ip_address=client_ip,
+        )
+        return RedirectResponse(
+            oauth_frontend_link_url(settings, provider, "success")
         )
 
     response = oauth_login_response(user, settings)
@@ -485,7 +570,6 @@ async def complete_oauth_login(
             detail="Authentification temporairement indisponible.",
         ) from exc
 
-    client_ip = request.client.host if request.client else "unknown"
     audit_service.record(
         actor=user,
         action=f"AUTH_OAUTH_{provider.upper()}_SUCCESS",
@@ -570,3 +654,23 @@ async def complete_facebook_login(
         exchange_store,
         audit_service,
     )
+
+
+@router.get("/oauth/google/link/start")
+async def start_google_link(
+    request: Request,
+    code: Annotated[str, Query(min_length=20, max_length=512)],
+    client: GoogleOidcClientDependency,
+    store: OAuthLinkCodeStoreDependency,
+):
+    return await begin_oauth_link("google", request, code, client, store)
+
+
+@router.get("/oauth/facebook/link/start")
+async def start_facebook_link(
+    request: Request,
+    code: Annotated[str, Query(min_length=20, max_length=512)],
+    client: FacebookOAuthClientDependency,
+    store: OAuthLinkCodeStoreDependency,
+):
+    return await begin_oauth_link("facebook", request, code, client, store)
