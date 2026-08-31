@@ -122,7 +122,7 @@ export default function LoginPage() {
         {expired && <p className="login-message">Session expirée. Connectez-vous à nouveau.</p>}
         {oauthError && (
           <p className="login-error" role="alert">
-            La connexion Google a été annulée ou refusée. Réessayez.
+            La connexion avec le fournisseur choisi a été annulée ou refusée. Réessayez.
           </p>
         )}
         {error && <p className="login-error" role="alert">{error}</p>}

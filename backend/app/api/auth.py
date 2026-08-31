@@ -44,11 +44,16 @@ from app.services.account_service import (
 from app.services.jwt_service import JwtService
 from app.services.password_service import PasswordService
 from app.services.google_oidc_client import GoogleOidcClient
+from app.services.facebook_oauth_client import FacebookOAuthClient
 from app.services.google_oidc_configuration import (
     GoogleOidcConfiguration,
     GoogleOidcConfigurationError,
 )
 from app.services.oauth_exchange_code_store import OAuthExchangeCodeStore
+from app.services.facebook_oauth_configuration import (
+    FacebookOAuthConfiguration,
+    FacebookOAuthConfigurationError,
+)
 from app.services.oauth_identity_service import (
     OAuthIdentityError,
     OAuthIdentityService,
@@ -125,6 +130,18 @@ def get_google_oidc_client() -> GoogleOidcClient:
     return GoogleOidcClient(configuration)
 
 
+def get_facebook_oauth_client() -> FacebookOAuthClient:
+    try:
+        configuration = FacebookOAuthConfiguration.from_settings(get_settings())
+    except FacebookOAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Connexion Facebook non configurée.",
+        ) from exc
+    return FacebookOAuthClient(configuration)
+
+
+
 def get_oauth_identity_service(
     db: Annotated[Session, Depends(get_db)],
 ) -> OAuthIdentityService:
@@ -144,6 +161,12 @@ GoogleOidcClientDependency = Annotated[
     GoogleOidcClient,
     Depends(get_google_oidc_client),
 ]
+FacebookOAuthClientDependency = Annotated[
+    FacebookOAuthClient,
+    Depends(get_facebook_oauth_client),
+]
+
+
 OAuthIdentityServiceDependency = Annotated[
     OAuthIdentityService,
     Depends(get_oauth_identity_service),
@@ -430,3 +453,51 @@ async def exchange_oauth_code(
         )
     return response
 
+
+
+@router.get("/oauth/facebook/login")
+async def start_facebook_login(
+    request: Request,
+    client: FacebookOAuthClientDependency,
+):
+    return await client.authorize_redirect(request)
+
+
+@router.get("/oauth/facebook/callback")
+async def complete_facebook_login(
+    request: Request,
+    client: FacebookOAuthClientDependency,
+    identity_service: OAuthIdentityServiceDependency,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+    audit_service: AuditServiceDependency,
+) -> RedirectResponse:
+    settings = get_settings()
+    try:
+        identity = await client.fetch_identity(request)
+        user = identity_service.resolve(identity)
+    except (OAuthError, OAuthIdentityError):
+        return RedirectResponse(
+            oauth_frontend_error_url(
+                settings,
+                "facebook_auth_failed",
+            )
+        )
+
+    response = oauth_login_response(user, settings)
+    try:
+        code = await exchange_store.issue(response)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentification temporairement indisponible.",
+        ) from exc
+
+    client_ip = request.client.host if request.client else "unknown"
+    audit_service.record(
+        actor=user,
+        action="AUTH_OAUTH_FACEBOOK_SUCCESS",
+        target_type="user",
+        target_id=str(user.id),
+        ip_address=client_ip,
+    )
+    return RedirectResponse(oauth_frontend_callback_url(settings, code))

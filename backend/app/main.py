@@ -12,6 +12,10 @@ from app.api.v1 import router as api_v1_router
 from app.api.auth import router as auth_router
 
 from app.core.config import get_settings
+from app.services.facebook_oauth_configuration import (
+    FacebookOAuthConfiguration,
+    FacebookOAuthConfigurationError,
+)
 from app.services.google_oidc_configuration import (
     GoogleOidcConfiguration,
     GoogleOidcConfigurationError,
@@ -59,10 +63,18 @@ try:
 except GoogleOidcConfigurationError:
     google_oidc_configuration = None
 
-if google_oidc_configuration is not None:
+try:
+    facebook_oauth_configuration = FacebookOAuthConfiguration.from_settings(settings)
+except FacebookOAuthConfigurationError:
+    facebook_oauth_configuration = None
+
+oauth_session_configuration = (
+    google_oidc_configuration or facebook_oauth_configuration
+)
+if oauth_session_configuration is not None:
     app.add_middleware(
         SessionMiddleware,
-        secret_key=google_oidc_configuration.session_secret_key,
+        secret_key=oauth_session_configuration.session_secret_key,
         same_site="lax",
         https_only=settings.app_env not in {"development", "test"},
     )
