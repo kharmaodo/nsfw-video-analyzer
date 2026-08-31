@@ -80,6 +80,12 @@ export default function LoginPage() {
   }
 
 
+  function startFacebookLogin(): void {
+    setError(null);
+    window.location.assign(`${backendOrigin}/auth/oauth/facebook/login`);
+  }
+
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -143,6 +149,15 @@ export default function LoginPage() {
           disabled={submitting || oauthExchanging}
         >
           Continuer avec Google
+        </button>
+
+        <button
+          type="button"
+          className="login-submit"
+          onClick={startFacebookLogin}
+          disabled={submitting || oauthExchanging}
+        >
+          Continuer avec Facebook
         </button>
 
       </section>
