@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from math import ceil
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from authlib.integrations.base_client import OAuthError
@@ -385,21 +385,13 @@ def update_current_user(
 
 
 
-@router.get("/oauth/google/login")
-async def start_google_login(
+async def complete_oauth_login(
+    provider: str,
     request: Request,
-    client: GoogleOidcClientDependency,
-):
-    return await client.authorize_redirect(request)
-
-
-@router.get("/oauth/google/callback")
-async def complete_google_login(
-    request: Request,
-    client: GoogleOidcClientDependency,
-    identity_service: OAuthIdentityServiceDependency,
-    exchange_store: OAuthExchangeCodeStoreDependency,
-    audit_service: AuditServiceDependency,
+    client: Any,
+    identity_service: OAuthIdentityService,
+    exchange_store: OAuthExchangeCodeStore,
+    audit_service: AuditService,
 ) -> RedirectResponse:
     settings = get_settings()
     try:
@@ -409,7 +401,7 @@ async def complete_google_login(
         return RedirectResponse(
             oauth_frontend_error_url(
                 settings,
-                "google_auth_failed",
+                f"{provider}_auth_failed",
             )
         )
 
@@ -425,12 +417,41 @@ async def complete_google_login(
     client_ip = request.client.host if request.client else "unknown"
     audit_service.record(
         actor=user,
-        action="AUTH_OAUTH_GOOGLE_SUCCESS",
+        action=f"AUTH_OAUTH_{provider.upper()}_SUCCESS",
         target_type="user",
         target_id=str(user.id),
         ip_address=client_ip,
     )
     return RedirectResponse(oauth_frontend_callback_url(settings, code))
+
+
+
+@router.get("/oauth/google/login")
+async def start_google_login(
+    request: Request,
+    client: GoogleOidcClientDependency,
+):
+    return await client.authorize_redirect(request)
+
+
+
+
+@router.get("/oauth/google/callback")
+async def complete_google_login(
+    request: Request,
+    client: GoogleOidcClientDependency,
+    identity_service: OAuthIdentityServiceDependency,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+    audit_service: AuditServiceDependency,
+) -> RedirectResponse:
+    return await complete_oauth_login(
+        "google",
+        request,
+        client,
+        identity_service,
+        exchange_store,
+        audit_service,
+    )
 
 
 @router.post("/oauth/exchange", response_model=LoginResponse)
@@ -454,7 +475,6 @@ async def exchange_oauth_code(
     return response
 
 
-
 @router.get("/oauth/facebook/login")
 async def start_facebook_login(
     request: Request,
@@ -471,33 +491,11 @@ async def complete_facebook_login(
     exchange_store: OAuthExchangeCodeStoreDependency,
     audit_service: AuditServiceDependency,
 ) -> RedirectResponse:
-    settings = get_settings()
-    try:
-        identity = await client.fetch_identity(request)
-        user = identity_service.resolve(identity)
-    except (OAuthError, OAuthIdentityError):
-        return RedirectResponse(
-            oauth_frontend_error_url(
-                settings,
-                "facebook_auth_failed",
-            )
-        )
-
-    response = oauth_login_response(user, settings)
-    try:
-        code = await exchange_store.issue(response)
-    except RedisError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentification temporairement indisponible.",
-        ) from exc
-
-    client_ip = request.client.host if request.client else "unknown"
-    audit_service.record(
-        actor=user,
-        action="AUTH_OAUTH_FACEBOOK_SUCCESS",
-        target_type="user",
-        target_id=str(user.id),
-        ip_address=client_ip,
+    return await complete_oauth_login(
+        "facebook",
+        request,
+        client,
+        identity_service,
+        exchange_store,
+        audit_service,
     )
-    return RedirectResponse(oauth_frontend_callback_url(settings, code))
