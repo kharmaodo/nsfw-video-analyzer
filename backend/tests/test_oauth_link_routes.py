@@ -97,3 +97,235 @@ async def test_rejects_expired_or_wrong_provider_link_code() -> None:
 
     assert getattr(exc_info.value, "status_code", None) == 401
     assert request.session == {}
+
+from types import SimpleNamespace
+
+from app.core.config import Settings
+from app.services.oauth_identity_service import OAuthIdentity, OAuthIdentityError
+
+
+class FakeCallbackRequest:
+    def __init__(self, session) -> None:
+        self.session = session
+        self.client = SimpleNamespace(host="testclient")
+
+
+class FakeCallbackClient:
+    async def fetch_identity(self, request):
+        return OAuthIdentity(
+            provider="google",
+            subject="google-linked-subject",
+            email="linked@example.test",
+        )
+
+
+class FakeCallbackIdentityService:
+    def __init__(self) -> None:
+        self.linked_user_id = None
+
+    def resolve(self, identity):
+        raise AssertionError("Une liaison ne doit pas créer de compte invité.")
+
+    def link_by_user_id(self, user_id, identity):
+        self.linked_user_id = user_id
+        return SimpleNamespace(id=user_id, username="linked-user")
+
+
+class RejectingCallbackIdentityService(FakeCallbackIdentityService):
+    def link_by_user_id(self, user_id, identity):
+        raise OAuthIdentityError("Identité déjà liée.")
+
+
+class FakeExchangeStore:
+    async def issue(self, response):
+        raise AssertionError("Une liaison ne doit pas créer de JWT.")
+
+
+class FakeAuditService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def record(self, **kwargs):
+        self.calls.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_callback_links_identity_to_user_saved_in_session(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth_api,
+        "get_settings",
+        lambda: Settings(
+            jwt_secret_key="0123456789abcdef0123456789abcdef",
+            oauth_frontend_link_success_url="http://localhost:5173/settings",
+        ),
+    )
+    identity_service = FakeCallbackIdentityService()
+    audit_service = FakeAuditService()
+    request = FakeCallbackRequest(
+        {"oauth_link": {"user_id": 7, "provider": "google"}}
+    )
+
+    response = await auth_api.complete_oauth_login(
+        "google",
+        request,
+        FakeCallbackClient(),
+        identity_service,
+        FakeExchangeStore(),
+        audit_service,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        "http://localhost:5173/settings"
+        "?oauth_link=success&provider=google"
+    )
+    assert identity_service.linked_user_id == 7
+    assert request.session == {}
+    assert audit_service.calls[0]["action"] == "AUTH_OAUTH_GOOGLE_LINK_SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_callback_redirects_to_settings_when_link_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth_api,
+        "get_settings",
+        lambda: Settings(
+            jwt_secret_key="0123456789abcdef0123456789abcdef",
+            oauth_frontend_link_success_url="http://localhost:5173/settings",
+        ),
+    )
+    request = FakeCallbackRequest(
+        {"oauth_link": {"user_id": 7, "provider": "google"}}
+    )
+
+    response = await auth_api.complete_oauth_login(
+        "google",
+        request,
+        FakeCallbackClient(),
+        RejectingCallbackIdentityService(),
+        FakeExchangeStore(),
+        FakeAuditService(),
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        "http://localhost:5173/settings"
+        "?oauth_link=error&provider=google"
+    )
+    assert request.session == {}
+
+from types import SimpleNamespace
+
+from app.core.config import Settings
+from app.services.oauth_identity_service import OAuthIdentity, OAuthIdentityError
+
+
+class FakeCallbackRequest:
+    def __init__(self, session) -> None:
+        self.session = session
+        self.client = SimpleNamespace(host="testclient")
+
+
+class FakeCallbackClient:
+    async def fetch_identity(self, request):
+        return OAuthIdentity(
+            provider="google",
+            subject="google-linked-subject",
+            email="linked@example.test",
+        )
+
+
+class FakeCallbackIdentityService:
+    def __init__(self) -> None:
+        self.linked_user_id = None
+
+    def resolve(self, identity):
+        raise AssertionError("Une liaison ne doit pas créer de compte invité.")
+
+    def link_by_user_id(self, user_id, identity):
+        self.linked_user_id = user_id
+        return SimpleNamespace(id=user_id, username="linked-user")
+
+
+class RejectingCallbackIdentityService(FakeCallbackIdentityService):
+    def link_by_user_id(self, user_id, identity):
+        raise OAuthIdentityError("Identité déjà liée.")
+
+
+class FakeExchangeStore:
+    async def issue(self, response):
+        raise AssertionError("Une liaison ne doit pas créer de JWT.")
+
+
+class FakeAuditService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def record(self, **kwargs):
+        self.calls.append(kwargs)
+
+
+@pytest.mark.asyncio
+async def test_callback_links_identity_to_user_saved_in_session(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth_api,
+        "get_settings",
+        lambda: Settings(
+            jwt_secret_key="0123456789abcdef0123456789abcdef",
+            oauth_frontend_link_success_url="http://localhost:5173/settings",
+        ),
+    )
+    identity_service = FakeCallbackIdentityService()
+    audit_service = FakeAuditService()
+    request = FakeCallbackRequest(
+        {"oauth_link": {"user_id": 7, "provider": "google"}}
+    )
+
+    response = await auth_api.complete_oauth_login(
+        "google",
+        request,
+        FakeCallbackClient(),
+        identity_service,
+        FakeExchangeStore(),
+        audit_service,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        "http://localhost:5173/settings"
+        "?oauth_link=success&provider=google"
+    )
+    assert identity_service.linked_user_id == 7
+    assert request.session == {}
+    assert audit_service.calls[0]["action"] == "AUTH_OAUTH_GOOGLE_LINK_SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_callback_redirects_to_settings_when_link_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        auth_api,
+        "get_settings",
+        lambda: Settings(
+            jwt_secret_key="0123456789abcdef0123456789abcdef",
+            oauth_frontend_link_success_url="http://localhost:5173/settings",
+        ),
+    )
+    request = FakeCallbackRequest(
+        {"oauth_link": {"user_id": 7, "provider": "google"}}
+    )
+
+    response = await auth_api.complete_oauth_login(
+        "google",
+        request,
+        FakeCallbackClient(),
+        RejectingCallbackIdentityService(),
+        FakeExchangeStore(),
+        FakeAuditService(),
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == (
+        "http://localhost:5173/settings"
+        "?oauth_link=error&provider=google"
+    )
+    assert request.session == {}
