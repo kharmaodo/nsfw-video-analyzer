@@ -68,6 +68,16 @@ class OAuthIdentityService:
         session.refresh(user)
         return user
 
+    def link_by_user_id(self, user_id: int, identity: OAuthIdentity) -> User:
+        user = self.users.get(user_id)
+        if user is None:
+            raise OAuthIdentityError(
+                "Utilisateur cible de la liaison OAuth introuvable."
+            )
+        return self.link(user, identity)
+
+
+
     def link(self, user: User, identity: OAuthIdentity) -> User:
         provider = identity.provider.strip().lower()
         subject = identity.subject.strip()

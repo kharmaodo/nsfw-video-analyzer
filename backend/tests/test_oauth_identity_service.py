@@ -129,3 +129,31 @@ def test_explicitly_links_identity_to_authenticated_user_only(tmp_path) -> None:
 
     Base.metadata.drop_all(engine)
     engine.dispose()
+
+
+def test_rejects_link_for_unknown_authenticated_user(tmp_path) -> None:
+    engine = build_engine(f"sqlite:///{tmp_path / 'oauth-link-missing-user.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    with session_factory() as session:
+        service = OAuthIdentityService(
+            UserRepository(session),
+            OAuthAccountRepository(session),
+            PasswordService(rounds=10),
+        )
+
+        with pytest.raises(
+            OAuthIdentityError,
+            match="Utilisateur cible de la liaison OAuth introuvable",
+        ):
+            service.link_by_user_id(
+                999,
+                OAuthIdentity(
+                    provider="facebook",
+                    subject="facebook-subject-unknown",
+                ),
+            )
+
+    Base.metadata.drop_all(engine)
+    engine.dispose()
