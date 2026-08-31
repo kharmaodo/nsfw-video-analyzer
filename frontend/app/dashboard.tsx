@@ -141,11 +141,16 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [queueingSelection, setQueueingSelection] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const session = readSession();
+  const [session, setSession] = useState<ReturnType<typeof readSession>>(null);
 
 
   useEffect(() => {
-    if (!readSession()) redirectToLogin();
+    const currentSession = readSession();
+    if (!currentSession) {
+      redirectToLogin();
+      return;
+    }
+    setSession(currentSession);
   }, []);
 
 
