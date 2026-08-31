@@ -10,6 +10,7 @@ from math import ceil
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from authlib.integrations.base_client import OAuthError
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from redis.exceptions import RedisError
@@ -163,6 +164,16 @@ def oauth_login_response(user, settings) -> LoginResponse:
             role=user.role,
         ),
     )
+
+
+def oauth_frontend_error_url(settings, error: str) -> str:
+    separator = "&" if "?" in settings.oauth_frontend_success_url else "?"
+    return "{}{}oauth_error={}".format(
+        settings.oauth_frontend_success_url,
+        separator,
+        quote(error),
+    )
+
 
 
 def oauth_frontend_callback_url(settings, code: str) -> str:
@@ -367,18 +378,19 @@ async def complete_google_login(
     exchange_store: OAuthExchangeCodeStoreDependency,
     audit_service: AuditServiceDependency,
 ) -> RedirectResponse:
+    settings = get_settings()
     try:
         identity = await client.fetch_identity(request)
         user = identity_service.resolve(identity)
-    except OAuthIdentityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentification Google impossible.",
-        ) from exc
+    except (OAuthError, OAuthIdentityError):
+        return RedirectResponse(
+            oauth_frontend_error_url(
+                settings,
+                "google_auth_failed",
+            )
+        )
 
-    settings = get_settings()
     response = oauth_login_response(user, settings)
-
     try:
         code = await exchange_store.issue(response)
     except RedisError as exc:
@@ -417,3 +429,4 @@ async def exchange_oauth_code(
             detail="Code OAuth invalide ou expiré.",
         )
     return response
+
