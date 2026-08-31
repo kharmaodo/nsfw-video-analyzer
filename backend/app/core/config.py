@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     oauth_google_client_id: str | None = None
     oauth_google_client_secret: str | None = None
     oauth_google_redirect_uri: str | None = None
+    oauth_facebook_client_id: str | None = None
+    oauth_facebook_client_secret: str | None = None
+    oauth_facebook_redirect_uri: str | None = None
+    oauth_facebook_graph_api_version: str = "v26.0"
     oauth_frontend_success_url: str = "http://localhost:3000/login"
     oauth_exchange_code_ttl_seconds: int = Field(default=60, ge=15, le=300)
     oauth_google_discovery_url: str = "https://accounts.google.com/.well-known/openid-configuration"
