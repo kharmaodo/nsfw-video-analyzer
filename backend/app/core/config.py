@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     oauth_facebook_graph_api_version: str = "v26.0"
     oauth_frontend_success_url: str = "http://localhost:3000/login"
     oauth_exchange_code_ttl_seconds: int = Field(default=60, ge=15, le=300)
+    oauth_link_code_ttl_seconds: int = Field(default=300, ge=60, le=900)
     oauth_google_discovery_url: str = "https://accounts.google.com/.well-known/openid-configuration"
     bcrypt_rounds: int = Field(default=12, ge=10, le=15)
 
