@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, KeyRound, Save, UserRound } from "lucide-react";
 
 import { api } from "../api-client";
@@ -23,8 +23,13 @@ type UpdateResponse = {
   user: { id: number; username: string; role: "GUEST" | "SUPER_POWER" };
 };
 
+type OAuthProviderRead = { provider: string };
+type OAuthLinkStartResponse = { code: string };
+
+
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -32,6 +37,10 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [enabledOAuthProviders, setEnabledOAuthProviders] = useState<string[]>([]);
+  const [linkingProvider, setLinkingProvider] = useState<string | null>(null);
+  const backendOrigin = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
+
 
 
   useEffect(() => {
@@ -41,11 +50,44 @@ export default function SettingsPage() {
       return;
     }
     setUsername(session.user.username);
+    const oauthLink = searchParams.get("oauth_link");
+    const provider = searchParams.get("provider");
+    if (oauthLink === "success" && provider) {
+      setMessage(`Compte ${provider} lié avec succès.`);
+      router.replace("/settings");
+    }
+    if (oauthLink === "error" && provider) {
+      setError(`Impossible de lier le compte ${provider}.`);
+      router.replace("/settings");
+    }
+
+    void api<OAuthProviderRead[]>("/auth/oauth/providers")
+      .then((providers) => setEnabledOAuthProviders(providers.map(({ provider }) => provider)))
+      .catch(() => setEnabledOAuthProviders([]));
+
     void api<AuditPage>("/auth/audit-logs?page=1&size=12")
       .then((result) => setLogs(result.items))
       .catch(() => setLogs([]));
 
   }, []);
+
+  async function startOAuthLink(provider: string): Promise<void> {
+    setLinkingProvider(provider);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await api<OAuthLinkStartResponse>(`/auth/oauth/${provider}/link`, {
+        method: "POST",
+      });
+      window.location.assign(
+        `${backendOrigin}/auth/oauth/${provider}/link/start?code=${encodeURIComponent(result.code)}`,
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Liaison OAuth impossible.");
+      setLinkingProvider(null);
+    }
+  }
+
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,6 +149,30 @@ export default function SettingsPage() {
           <input id="settings-new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" />
           <button disabled={submitting}><Save size={16} />{submitting ? "Enregistrement…" : "Enregistrer"}</button>
         </form>
+        <section className="settings-oauth" aria-labelledby="settings-oauth-title">
+          <h2 id="settings-oauth-title">Comptes de connexion</h2>
+          <p>Liez un fournisseur pour pouvoir vous connecter à ce même compte.</p>
+          {enabledOAuthProviders.includes("google") && (
+            <button
+              type="button"
+              onClick={() => void startOAuthLink("google")}
+              disabled={linkingProvider !== null}
+            >
+              {linkingProvider === "google" ? "Redirection Google…" : "Lier Google"}
+            </button>
+          )}
+          {enabledOAuthProviders.includes("facebook") && (
+            <button
+              type="button"
+              onClick={() => void startOAuthLink("facebook")}
+              disabled={linkingProvider !== null}
+            >
+              {linkingProvider === "facebook" ? "Redirection Facebook…" : "Lier Facebook"}
+            </button>
+          )}
+        </section>
+
+
         <section className="settings-audit" aria-labelledby="settings-audit-title">
           <h2 id="settings-audit-title">Activité récente</h2>
           {logs.length === 0
