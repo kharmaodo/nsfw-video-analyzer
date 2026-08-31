@@ -10,6 +10,9 @@ from app.services.google_oidc_configuration import (
 def test_rejects_incomplete_google_oidc_configuration() -> None:
     settings = Settings(
         jwt_secret_key="0123456789abcdef0123456789abcdef",
+        oauth_session_secret_key="",
+        oauth_google_client_secret="",
+        oauth_google_redirect_uri="",
         oauth_google_client_id="google-client-id",
     )
 
