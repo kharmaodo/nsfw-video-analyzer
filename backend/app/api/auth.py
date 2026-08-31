@@ -27,6 +27,7 @@ from app.schemas.auth import (
     AuthenticatedUserRead,
     LoginRequest,
     LoginResponse,
+    OAuthExchangeRequest,
 )
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 
@@ -348,3 +349,71 @@ def update_current_user(
         ),
     )
 
+
+
+@router.get("/oauth/google/login")
+async def start_google_login(
+    request: Request,
+    client: GoogleOidcClientDependency,
+):
+    return await client.authorize_redirect(request)
+
+
+@router.get("/oauth/google/callback")
+async def complete_google_login(
+    request: Request,
+    client: GoogleOidcClientDependency,
+    identity_service: OAuthIdentityServiceDependency,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+    audit_service: AuditServiceDependency,
+) -> RedirectResponse:
+    try:
+        identity = await client.fetch_identity(request)
+        user = identity_service.resolve(identity)
+    except OAuthIdentityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentification Google impossible.",
+        ) from exc
+
+    settings = get_settings()
+    response = oauth_login_response(user, settings)
+
+    try:
+        code = await exchange_store.issue(response)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentification temporairement indisponible.",
+        ) from exc
+
+    client_ip = request.client.host if request.client else "unknown"
+    audit_service.record(
+        actor=user,
+        action="AUTH_OAUTH_GOOGLE_SUCCESS",
+        target_type="user",
+        target_id=str(user.id),
+        ip_address=client_ip,
+    )
+    return RedirectResponse(oauth_frontend_callback_url(settings, code))
+
+
+@router.post("/oauth/exchange", response_model=LoginResponse)
+async def exchange_oauth_code(
+    payload: OAuthExchangeRequest,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+) -> LoginResponse:
+    try:
+        response = await exchange_store.consume(payload.code)
+    except RedisError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentification temporairement indisponible.",
+        ) from exc
+
+    if response is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Code OAuth invalide ou expiré.",
+        )
+    return response

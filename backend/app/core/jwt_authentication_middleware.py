@@ -12,6 +12,9 @@ from app.services.jwt_service import (
 PUBLIC_ENDPOINTS = {
     ("GET", "/health"),
     ("POST", "/auth/login"),
+        ("GET", "/auth/oauth/google/login"),
+        ("GET", "/auth/oauth/google/callback"),
+        ("POST", "/auth/oauth/exchange"),
 }
 
 
