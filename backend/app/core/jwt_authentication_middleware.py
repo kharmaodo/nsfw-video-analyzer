@@ -15,6 +15,7 @@ PUBLIC_ENDPOINTS = {
         ("GET", "/auth/oauth/google/login"),
         ("GET", "/auth/oauth/google/callback"),
         ("POST", "/auth/oauth/exchange"),
+        ("GET", "/auth/oauth/providers"),
         ("GET", "/auth/oauth/facebook/login"),
         ("GET", "/auth/oauth/facebook/callback"),
 }

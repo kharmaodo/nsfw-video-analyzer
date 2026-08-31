@@ -29,6 +29,7 @@ from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
     OAuthExchangeRequest,
+    OAuthProviderRead,
 )
 from app.schemas.audit import AuditLogListResponse, AuditLogRead
 
@@ -206,6 +207,31 @@ def oauth_frontend_callback_url(settings, code: str) -> str:
         separator,
         quote(code),
     )
+
+
+def enabled_oauth_providers() -> list[OAuthProviderRead]:
+    settings = get_settings()
+    providers: list[OAuthProviderRead] = []
+
+    try:
+        GoogleOidcConfiguration.from_settings(settings)
+        providers.append(OAuthProviderRead(provider="google"))
+    except GoogleOidcConfigurationError:
+        pass
+
+    try:
+        FacebookOAuthConfiguration.from_settings(settings)
+        providers.append(OAuthProviderRead(provider="facebook"))
+    except FacebookOAuthConfigurationError:
+        pass
+
+    return providers
+
+
+@router.get("/oauth/providers", response_model=list[OAuthProviderRead])
+def list_oauth_providers() -> list[OAuthProviderRead]:
+    return enabled_oauth_providers()
+
 
 
 @router.post("/login", response_model=LoginResponse)
