@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 
@@ -22,6 +22,61 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const expired = searchParams.get("reason") === "expired";
+  const oauthCode = searchParams.get("oauth_code");
+  const processedOAuthCode = useRef<string | null>(null);
+  const [oauthExchanging, setOauthExchanging] = useState(false);
+  const backendOrigin = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
+
+  useEffect(() => {
+    if (!oauthCode || processedOAuthCode.current === oauthCode) return;
+
+    processedOAuthCode.current = oauthCode;
+    setOauthExchanging(true);
+    setError(null);
+
+    async function exchangeOAuthCode(): Promise<void> {
+      try {
+        const response = await fetch("/api/backend/auth/oauth/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: oauthCode }),
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(
+            typeof body?.detail === "string"
+              ? body.detail
+              : "Connexion Google impossible.",
+          );
+        }
+
+        const result = body as LoginResponse;
+        saveSession({
+          accessToken: result.access_token,
+          expiresIn: result.expires_in,
+          user: result.user,
+        });
+        router.replace("/");
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "Connexion Google impossible.",
+        );
+        router.replace("/login");
+      } finally {
+        setOauthExchanging(false);
+      }
+    }
+
+    void exchangeOAuthCode();
+  }, [oauthCode, router]);
+
+  function startGoogleLogin(): void {
+    setError(null);
+    window.location.assign(`${backendOrigin}/auth/oauth/google/login`);
+  }
+
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,8 +127,17 @@ export default function LoginPage() {
             <input id="password" type={visiblePassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
             <button type="button" onClick={() => setVisiblePassword((value) => !value)} aria-label={visiblePassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>{visiblePassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
           </div>
-          <button className="login-submit" disabled={submitting}>{submitting ? "Connexion…" : "Se connecter"}</button>
+          <button className="login-submit" disabled={submitting || oauthExchanging}>{submitting || oauthExchanging ? "Connexion…" : "Se connecter"}</button>
         </form>
+        <button
+          type="button"
+          className="login-submit"
+          onClick={startGoogleLogin}
+          disabled={submitting || oauthExchanging}
+        >
+          Continuer avec Google
+        </button>
+
       </section>
     </main>
   );

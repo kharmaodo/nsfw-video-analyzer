@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 from app.api.v1 import router as api_v1_router
 from app.api.auth import router as auth_router
@@ -43,6 +44,14 @@ app = FastAPI(
     lifespan=lifespan,
 
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(settings.api_cors_allowed_origins),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 app.add_middleware(JwtAuthenticationMiddleware)
 
 try:

@@ -81,6 +81,10 @@ class Settings(BaseSettings):
         "testserver",
         "api",
     )
+    api_cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = (
+        "http://localhost:5173",
+    )
+
     api_max_request_bytes: int = Field(default=2 * 1024 * 1024, ge=1024, le=20 * 1024 * 1024)
 
     @field_validator("video_allowed_content_types", mode="before")
@@ -90,7 +94,7 @@ class Settings(BaseSettings):
             return tuple(item.strip().lower() for item in value.split(",") if item.strip())
         return value
 
-    @field_validator("api_allowed_hosts", mode="before")
+    @field_validator("api_allowed_hosts", "api_cors_allowed_origins", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, value):  # type: ignore[no-untyped-def]
         if isinstance(value, str):
