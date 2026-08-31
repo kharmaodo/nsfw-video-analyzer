@@ -22,6 +22,11 @@ class LoginResponse(BaseModel):
 
 
 
+class OAuthExchangeRequest(BaseModel):
+    code: str = Field(min_length=20, max_length=512)
+
+
+
 class AccountUpdateRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=256)
     username: str | None = Field(default=None, min_length=1, max_length=100)
