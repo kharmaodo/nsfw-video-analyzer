@@ -12,7 +12,7 @@ from app.api.auth import (
 from app.core.config import get_settings
 from app.db.models import UserRole
 from app.main import app
-from app.services.oauth_identity_service import OAuthIdentity
+from app.services.oauth_identity_service import OAuthIdentity, OAuthIdentityError
 
 
 class FakeFacebookClient:
@@ -103,6 +103,49 @@ def test_facebook_oauth_routes_and_one_time_exchange(monkeypatch) -> None:
             )
             assert reused.status_code == 401
             assert reused.json()["detail"] == "Code OAuth invalide ou expiré."
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+
+
+class RejectingFacebookClient:
+    async def authorize_redirect(self, request):
+        raise AssertionError("Cette méthode ne doit pas être appelée.")
+
+    async def fetch_identity(self, request):
+        raise OAuthIdentityError("Accès Facebook refusé.")
+
+
+def test_facebook_callback_redirects_when_facebook_rejects(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "0123456789abcdef0123456789abcdef",
+    )
+    monkeypatch.setenv(
+        "OAUTH_FRONTEND_SUCCESS_URL",
+        "http://localhost:5173/login",
+    )
+    get_settings.cache_clear()
+
+    app.dependency_overrides[get_facebook_oauth_client] = (
+        lambda: RejectingFacebookClient()
+    )
+    app.dependency_overrides[get_oauth_identity_service] = lambda: FakeIdentityService()
+    app.dependency_overrides[get_oauth_exchange_code_store] = lambda: FakeExchangeStore()
+    app.dependency_overrides[get_audit_service] = lambda: FakeAuditService()
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/auth/oauth/facebook/callback",
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert response.headers["location"] == (
+            "http://localhost:5173/login"
+            "?oauth_error=facebook_auth_failed"
+        )
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
