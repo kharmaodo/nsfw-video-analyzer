@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RefreshCw, ShieldCheck, Trash2, UserPlus, UsersRound } from "lucide-react";
 
@@ -41,16 +42,19 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    const session = readSession();
-    if (!session) {
-      redirectToLogin();
-      return;
-    }
-    if (session.user.role !== "SUPER_POWER") {
-      router.replace("/");
-      return;
-    }
-    void refresh();
+    const timeout = window.setTimeout(() => {
+      const session = readSession();
+      if (!session) {
+        redirectToLogin();
+        return;
+      }
+      if (session.user.role !== "SUPER_POWER") {
+        router.replace("/");
+        return;
+      }
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [router]);
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
@@ -94,7 +98,7 @@ export default function AdminPage() {
   return (
     <main className="admin-shell">
       <header className="admin-topbar">
-        <a href="/" className="admin-back"><ArrowLeft size={16} />Tableau de bord</a>
+        <Link href="/" className="admin-back"><ArrowLeft size={16} />Tableau de bord</Link>
         <button className="icon-button" onClick={() => void refresh()} aria-label="Actualiser"><RefreshCw size={18} className={loading ? "spin" : ""} /></button>
       </header>
       <section className="admin-heading"><span><ShieldCheck size={24} /></span><div><p className="eyebrow">SUPER_POWER</p><h1>Administration</h1><p>Comptes utilisateurs et journal d’activité.</p></div></section>

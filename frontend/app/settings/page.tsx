@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, KeyRound, Save, UserRound } from "lucide-react";
 
@@ -44,32 +45,32 @@ export default function SettingsPage() {
 
 
   useEffect(() => {
-    const session = readSession();
-    if (!session) {
-      redirectToLogin();
-      return;
-    }
-    setUsername(session.user.username);
-    const oauthLink = searchParams.get("oauth_link");
-    const provider = searchParams.get("provider");
-    if (oauthLink === "success" && provider) {
-      setMessage(`Compte ${provider} lié avec succès.`);
-      router.replace("/settings");
-    }
-    if (oauthLink === "error" && provider) {
-      setError(`Impossible de lier le compte ${provider}.`);
-      router.replace("/settings");
-    }
-
-    void api<OAuthProviderRead[]>("/auth/oauth/providers")
-      .then((providers) => setEnabledOAuthProviders(providers.map(({ provider }) => provider)))
-      .catch(() => setEnabledOAuthProviders([]));
-
-    void api<AuditPage>("/auth/audit-logs?page=1&size=12")
-      .then((result) => setLogs(result.items))
-      .catch(() => setLogs([]));
-
-  }, []);
+    const timeout = window.setTimeout(() => {
+      const session = readSession();
+      if (!session) {
+        redirectToLogin();
+        return;
+      }
+      setUsername(session.user.username);
+      const oauthLink = searchParams.get("oauth_link");
+      const provider = searchParams.get("provider");
+      if (oauthLink === "success" && provider) {
+        setMessage(`Compte ${provider} lié avec succès.`);
+        router.replace("/settings");
+      }
+      if (oauthLink === "error" && provider) {
+        setError(`Impossible de lier le compte ${provider}.`);
+        router.replace("/settings");
+      }
+      void api<OAuthProviderRead[]>("/auth/oauth/providers")
+        .then((providers) => setEnabledOAuthProviders(providers.map(({ provider }) => provider)))
+        .catch(() => setEnabledOAuthProviders([]));
+      void api<AuditPage>("/auth/audit-logs?page=1&size=12")
+        .then((result) => setLogs(result.items))
+        .catch(() => setLogs([]));
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [router, searchParams]);
 
   async function startOAuthLink(provider: string): Promise<void> {
     setLinkingProvider(provider);
@@ -132,7 +133,7 @@ export default function SettingsPage() {
 
   return (
     <main className="settings-shell">
-      <a href="/" className="admin-back"><ArrowLeft size={16} />Tableau de bord</a>
+      <Link href="/" className="admin-back"><ArrowLeft size={16} />Tableau de bord</Link>
       <section className="settings-card">
         <span className="settings-mark"><UserRound size={24} /></span>
         <p className="eyebrow">COMPTE UTILISATEUR</p>

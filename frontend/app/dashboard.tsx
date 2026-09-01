@@ -92,10 +92,6 @@ function MediaMetadata({ media }: { media: Video }) {
 
   if (!media.metadata_title && !date && !hasGps) return null;
 
-  function logout() {
-    clearSession();
-    redirectToLogin();
-  }
 
 
   return (
@@ -111,10 +107,6 @@ function StatusBadge({ status }: { status: VideoStatus }) {
     : status === "SAMPLED_NSFW" ? ShieldX
       : status === "ERROR" || status === "REJECTED" ? CircleOff
         : activeStatuses.includes(status) ? LoaderCircle : CheckCircle2;
-  function logout() {
-    clearSession();
-    redirectToLogin();
-  }
 
 
   return (
