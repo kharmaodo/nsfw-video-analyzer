@@ -47,6 +47,7 @@ from app.services.jwt_service import JwtService
 from app.services.password_service import PasswordService
 from app.services.google_oidc_client import GoogleOidcClient
 from app.services.facebook_oauth_client import FacebookOAuthClient
+from app.services.twitter_oauth_client import TwitterOAuthClient
 from app.services.google_oidc_configuration import (
     GoogleOidcConfiguration,
     GoogleOidcConfigurationError,
@@ -56,6 +57,10 @@ from app.services.oauth_link_code_store import OAuthLinkCodeStore
 from app.services.facebook_oauth_configuration import (
     FacebookOAuthConfiguration,
     FacebookOAuthConfigurationError,
+)
+from app.services.twitter_oauth_configuration import (
+    TwitterOAuthConfiguration,
+    TwitterOAuthConfigurationError,
 )
 from app.services.oauth_identity_service import (
     OAuthIdentityError,
@@ -145,6 +150,18 @@ def get_facebook_oauth_client() -> FacebookOAuthClient:
 
 
 
+def get_twitter_oauth_client() -> TwitterOAuthClient:
+    try:
+        configuration = TwitterOAuthConfiguration.from_settings(get_settings())
+    except TwitterOAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Connexion X/Twitter non configurée.",
+        ) from exc
+    return TwitterOAuthClient(configuration)
+
+
+
 def get_oauth_identity_service(
     db: Annotated[Session, Depends(get_db)],
 ) -> OAuthIdentityService:
@@ -173,6 +190,13 @@ FacebookOAuthClientDependency = Annotated[
     FacebookOAuthClient,
     Depends(get_facebook_oauth_client),
 ]
+
+
+TwitterOAuthClientDependency = Annotated[
+    TwitterOAuthClient,
+    Depends(get_twitter_oauth_client),
+]
+
 
 
 OAuthIdentityServiceDependency = Annotated[
@@ -251,6 +275,12 @@ def enabled_oauth_providers() -> list[OAuthProviderRead]:
         FacebookOAuthConfiguration.from_settings(settings)
         providers.append(OAuthProviderRead(provider="facebook"))
     except FacebookOAuthConfigurationError:
+        pass
+
+    try:
+        TwitterOAuthConfiguration.from_settings(settings)
+        providers.append(OAuthProviderRead(provider="twitter"))
+    except TwitterOAuthConfigurationError:
         pass
 
     return providers
@@ -471,6 +501,15 @@ async def create_facebook_link_code(
 
 
 
+@router.post("/oauth/twitter/link", response_model=OAuthLinkStartResponse)
+async def create_twitter_link_code(
+    user: CurrentUserDependency,
+    store: OAuthLinkCodeStoreDependency,
+) -> OAuthLinkStartResponse:
+    return await issue_oauth_link_code("twitter", user, store)
+
+
+
 async def begin_oauth_link(
     provider: str,
     request: Request,
@@ -674,3 +713,39 @@ async def start_facebook_link(
     store: OAuthLinkCodeStoreDependency,
 ):
     return await begin_oauth_link("facebook", request, code, client, store)
+
+
+@router.get("/oauth/twitter/login")
+async def start_twitter_login(
+    request: Request,
+    client: TwitterOAuthClientDependency,
+):
+    return await client.authorize_redirect(request)
+
+
+@router.get("/oauth/twitter/callback")
+async def complete_twitter_login(
+    request: Request,
+    client: TwitterOAuthClientDependency,
+    identity_service: OAuthIdentityServiceDependency,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+    audit_service: AuditServiceDependency,
+) -> RedirectResponse:
+    return await complete_oauth_login(
+        "twitter",
+        request,
+        client,
+        identity_service,
+        exchange_store,
+        audit_service,
+    )
+
+
+@router.get("/oauth/twitter/link/start")
+async def start_twitter_link(
+    request: Request,
+    code: Annotated[str, Query(min_length=20, max_length=512)],
+    client: TwitterOAuthClientDependency,
+    store: OAuthLinkCodeStoreDependency,
+):
+    return await begin_oauth_link("twitter", request, code, client, store)
