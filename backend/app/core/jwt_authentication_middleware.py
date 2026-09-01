@@ -20,9 +20,15 @@ PUBLIC_ENDPOINTS = {
         ("GET", "/auth/oauth/facebook/callback"),
         ("GET", "/auth/oauth/twitter/login"),
         ("GET", "/auth/oauth/twitter/callback"),
+        ("GET", "/auth/oauth/tiktok/login"),
+        ("GET", "/auth/oauth/tiktok/callback"),
+        ("GET", "/auth/oauth/tiktok/login"),
+        ("GET", "/auth/oauth/tiktok/callback"),
         ("GET", "/auth/oauth/google/link/start"),
         ("GET", "/auth/oauth/facebook/link/start"),
         ("GET", "/auth/oauth/twitter/link/start"),
+        ("GET", "/auth/oauth/tiktok/link/start"),
+        ("GET", "/auth/oauth/tiktok/link/start"),
 }
 
 

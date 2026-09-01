@@ -48,6 +48,7 @@ from app.services.password_service import PasswordService
 from app.services.google_oidc_client import GoogleOidcClient
 from app.services.facebook_oauth_client import FacebookOAuthClient
 from app.services.twitter_oauth_client import TwitterOAuthClient
+from app.services.tiktok_oauth_client import TikTokOAuthClient
 from app.services.google_oidc_configuration import (
     GoogleOidcConfiguration,
     GoogleOidcConfigurationError,
@@ -61,6 +62,10 @@ from app.services.facebook_oauth_configuration import (
 from app.services.twitter_oauth_configuration import (
     TwitterOAuthConfiguration,
     TwitterOAuthConfigurationError,
+)
+from app.services.tiktok_oauth_configuration import (
+    TikTokOAuthConfiguration,
+    TikTokOAuthConfigurationError,
 )
 from app.services.oauth_identity_service import (
     OAuthIdentityError,
@@ -162,6 +167,18 @@ def get_twitter_oauth_client() -> TwitterOAuthClient:
 
 
 
+def get_tiktok_oauth_client() -> TikTokOAuthClient:
+    try:
+        configuration = TikTokOAuthConfiguration.from_settings(get_settings())
+    except TikTokOAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Connexion TikTok non configurée.",
+        ) from exc
+    return TikTokOAuthClient(configuration)
+
+
+
 def get_oauth_identity_service(
     db: Annotated[Session, Depends(get_db)],
 ) -> OAuthIdentityService:
@@ -195,6 +212,13 @@ FacebookOAuthClientDependency = Annotated[
 TwitterOAuthClientDependency = Annotated[
     TwitterOAuthClient,
     Depends(get_twitter_oauth_client),
+]
+
+
+
+TikTokOAuthClientDependency = Annotated[
+    TikTokOAuthClient,
+    Depends(get_tiktok_oauth_client),
 ]
 
 
@@ -281,6 +305,12 @@ def enabled_oauth_providers() -> list[OAuthProviderRead]:
         TwitterOAuthConfiguration.from_settings(settings)
         providers.append(OAuthProviderRead(provider="twitter"))
     except TwitterOAuthConfigurationError:
+        pass
+
+    try:
+        TikTokOAuthConfiguration.from_settings(settings)
+        providers.append(OAuthProviderRead(provider="tiktok"))
+    except TikTokOAuthConfigurationError:
         pass
 
     return providers
@@ -507,6 +537,15 @@ async def create_twitter_link_code(
     store: OAuthLinkCodeStoreDependency,
 ) -> OAuthLinkStartResponse:
     return await issue_oauth_link_code("twitter", user, store)
+
+
+
+@router.post("/oauth/tiktok/link", response_model=OAuthLinkStartResponse)
+async def create_tiktok_link_code(
+    user: CurrentUserDependency,
+    store: OAuthLinkCodeStoreDependency,
+) -> OAuthLinkStartResponse:
+    return await issue_oauth_link_code("tiktok", user, store)
 
 
 
@@ -749,3 +788,39 @@ async def start_twitter_link(
     store: OAuthLinkCodeStoreDependency,
 ):
     return await begin_oauth_link("twitter", request, code, client, store)
+
+
+@router.get("/oauth/tiktok/login")
+async def start_tiktok_login(
+    request: Request,
+    client: TikTokOAuthClientDependency,
+):
+    return await client.authorize_redirect(request)
+
+
+@router.get("/oauth/tiktok/callback")
+async def complete_tiktok_login(
+    request: Request,
+    client: TikTokOAuthClientDependency,
+    identity_service: OAuthIdentityServiceDependency,
+    exchange_store: OAuthExchangeCodeStoreDependency,
+    audit_service: AuditServiceDependency,
+) -> RedirectResponse:
+    return await complete_oauth_login(
+        "tiktok",
+        request,
+        client,
+        identity_service,
+        exchange_store,
+        audit_service,
+    )
+
+
+@router.get("/oauth/tiktok/link/start")
+async def start_tiktok_link(
+    request: Request,
+    code: Annotated[str, Query(min_length=20, max_length=512)],
+    client: TikTokOAuthClientDependency,
+    store: OAuthLinkCodeStoreDependency,
+):
+    return await begin_oauth_link("tiktok", request, code, client, store)

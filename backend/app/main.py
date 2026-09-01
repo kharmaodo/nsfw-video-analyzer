@@ -16,6 +16,14 @@ from app.services.facebook_oauth_configuration import (
     FacebookOAuthConfiguration,
     FacebookOAuthConfigurationError,
 )
+from app.services.tiktok_oauth_configuration import (
+    TikTokOAuthConfiguration,
+    TikTokOAuthConfigurationError,
+)
+from app.services.tiktok_oauth_configuration import (
+    TikTokOAuthConfiguration,
+    TikTokOAuthConfigurationError,
+)
 from app.services.twitter_oauth_configuration import (
     TwitterOAuthConfiguration,
     TwitterOAuthConfigurationError,
@@ -77,8 +85,18 @@ try:
 except TwitterOAuthConfigurationError:
     twitter_oauth_configuration = None
 
+try:
+    tiktok_oauth_configuration = TikTokOAuthConfiguration.from_settings(settings)
+except TikTokOAuthConfigurationError:
+    tiktok_oauth_configuration = None
+
+try:
+    tiktok_oauth_configuration = TikTokOAuthConfiguration.from_settings(settings)
+except TikTokOAuthConfigurationError:
+    tiktok_oauth_configuration = None
+
 oauth_session_configuration = (
-    google_oidc_configuration or facebook_oauth_configuration or twitter_oauth_configuration
+    google_oidc_configuration or facebook_oauth_configuration or twitter_oauth_configuration or tiktok_oauth_configuration or tiktok_oauth_configuration
 )
 if oauth_session_configuration is not None:
     app.add_middleware(
