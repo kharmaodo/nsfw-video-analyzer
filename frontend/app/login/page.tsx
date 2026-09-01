@@ -38,6 +38,7 @@ export default function LoginPage() {
   const googleEnabled = enabledOAuthProviders?.includes("google") ?? false;
   const facebookEnabled = enabledOAuthProviders?.includes("facebook") ?? false;
   const twitterEnabled = enabledOAuthProviders?.includes("twitter") ?? false;
+  const tiktokEnabled = enabledOAuthProviders?.includes("tiktok") ?? false;
 
   useEffect(() => {
     let active = true;
@@ -121,6 +122,13 @@ export default function LoginPage() {
   function startTwitterLogin(): void {
     setError(null);
     window.location.assign(`${backendOrigin}/auth/oauth/twitter/login`);
+  }
+
+
+
+  function startTikTokLogin(): void {
+    setError(null);
+    window.location.assign(`${backendOrigin}/auth/oauth/tiktok/login`);
   }
 
 
@@ -209,6 +217,16 @@ export default function LoginPage() {
           disabled={submitting || oauthExchanging}
         >
           Continuer avec X (Twitter)
+        </button>
+
+        <button
+          type="button"
+          className="login-submit"
+          onClick={startTikTokLogin}
+          hidden={!tiktokEnabled}
+          disabled={submitting || oauthExchanging}
+        >
+          Continuer avec TikTok
         </button>
 
       </section>

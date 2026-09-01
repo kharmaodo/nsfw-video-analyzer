@@ -185,6 +185,18 @@ export default function SettingsPage() {
             </button>
           )}
 
+          {enabledOAuthProviders.includes("tiktok") && (
+            <button
+              type="button"
+              onClick={() => void startOAuthLink("tiktok")}
+              disabled={linkingProvider !== null}
+            >
+              {linkingProvider === "tiktok"
+                ? "Redirection TikTok…"
+                : "Lier TikTok"}
+            </button>
+          )}
+
         <section className="settings-audit" aria-labelledby="settings-audit-title">
           <h2 id="settings-audit-title">Activité récente</h2>
           {logs.length === 0
