@@ -32,7 +32,6 @@ jobs:
         working-directory: backend
       - run: pytest --cov=app --cov-report=term-missing
         working-directory: backend
-      - run: cd backend && pytest --cov=app --cov-report=term-missing
 
   frontend:
     runs-on: ubuntu-latest
