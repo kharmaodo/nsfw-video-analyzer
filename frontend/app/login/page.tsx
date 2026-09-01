@@ -37,6 +37,7 @@ export default function LoginPage() {
   const backendOrigin = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "");
   const googleEnabled = enabledOAuthProviders?.includes("google") ?? false;
   const facebookEnabled = enabledOAuthProviders?.includes("facebook") ?? false;
+  const twitterEnabled = enabledOAuthProviders?.includes("twitter") ?? false;
 
   useEffect(() => {
     let active = true;
@@ -79,7 +80,7 @@ export default function LoginPage() {
           throw new Error(
             typeof body?.detail === "string"
               ? body.detail
-              : "Connexion Google impossible.",
+              : "Connexion OAuth impossible.",
           );
         }
 
@@ -94,7 +95,7 @@ export default function LoginPage() {
         setError(
           reason instanceof Error
             ? reason.message
-            : "Connexion Google impossible.",
+            : "Connexion OAuth impossible.",
         );
         router.replace("/login");
       } finally {
@@ -115,6 +116,13 @@ export default function LoginPage() {
     setError(null);
     window.location.assign(`${backendOrigin}/auth/oauth/facebook/login`);
   }
+
+
+  function startTwitterLogin(): void {
+    setError(null);
+    window.location.assign(`${backendOrigin}/auth/oauth/twitter/login`);
+  }
+
 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -191,6 +199,16 @@ export default function LoginPage() {
           disabled={submitting || oauthExchanging}
         >
           Continuer avec Facebook
+        </button>
+
+        <button
+          type="button"
+          className="login-submit"
+          onClick={startTwitterLogin}
+          hidden={!twitterEnabled}
+          disabled={submitting || oauthExchanging}
+        >
+          Continuer avec X (Twitter)
         </button>
 
       </section>

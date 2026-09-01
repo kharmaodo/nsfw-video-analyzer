@@ -173,6 +173,18 @@ export default function SettingsPage() {
         </section>
 
 
+          {enabledOAuthProviders.includes("twitter") && (
+            <button
+              type="button"
+              onClick={() => void startOAuthLink("twitter")}
+              disabled={linkingProvider !== null}
+            >
+              {linkingProvider === "twitter"
+                ? "Redirection X/Twitter…"
+                : "Lier X (Twitter)"}
+            </button>
+          )}
+
         <section className="settings-audit" aria-labelledby="settings-audit-title">
           <h2 id="settings-audit-title">Activité récente</h2>
           {logs.length === 0
