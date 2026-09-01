@@ -53,6 +53,31 @@ class VideoQueueService:
             self.repository.save(video)
             raise
 
+    def reanalyze(self, video_id: int) -> EnqueueResponse:
+        video = self.repository.get(video_id)
+        if video is None:
+            raise QueueVideoNotFoundError("Vidéo introuvable.")
+        if video.status != VideoStatus.ERROR:
+            raise VideoNotQueueableError(
+                f"La vidéo doit être au statut ERROR, statut actuel : {video.status.value}."
+            )
+
+        previous_error = video.error_message
+        video = self.repository.mark_error_queued(video_id)
+        if video is None:
+            raise VideoNotQueueableError(
+                "La vidéo a déjà été reprise par une autre requête."
+            )
+
+        try:
+            return self._dispatch_queued(video)
+        except QueueUnavailableError:
+            video.status = VideoStatus.ERROR
+            video.error_message = previous_error
+            self.repository.save(video)
+            raise
+
+
     def requeue(self, video_id: int) -> EnqueueResponse:
         video = self.repository.get(video_id)
         if video is None:

@@ -96,3 +96,104 @@ def test_requeue_queued_video(client: TestClient) -> None:
         "task_id": "recovered-task",
         "status": "QUEUED",
     }
+def create_error_video(client) -> int:
+
+    media_id = create_ready_video(client)
+
+    install_queue_override(lambda _media_id: FakeTask("failed-task"))
+
+    assert client.post(f"/api/v1/videos/{media_id}/enqueue").status_code == 202
+
+    response = client.patch(
+
+        f"/api/v1/videos/{media_id}/status",
+
+        json={"status": "ERROR", "error_message": "Analyse interrompue."},
+
+    )
+
+    assert response.status_code == 200
+
+    return media_id
+
+
+
+
+
+def test_reanalyze_error_media(client) -> None:
+
+    media_id = create_error_video(client)
+
+    install_queue_override(lambda _media_id: FakeTask("retry-task"))
+
+
+
+    response = client.post(f"/api/v1/media/{media_id}/reanalyze")
+
+
+
+    assert response.status_code == 202
+
+    assert response.json()["task_id"] == "retry-task"
+
+    video = client.get(f"/api/v1/media/{media_id}").json()
+
+    assert video["status"] == "QUEUED"
+
+    assert video["task_id"] == "retry-task"
+
+    assert video["error_message"] is None
+
+
+
+
+
+def test_reanalyze_requires_error_status(client) -> None:
+
+    media_id = create_ready_video(client)
+
+
+
+    response = client.post(f"/api/v1/media/{media_id}/reanalyze")
+
+
+
+    assert response.status_code == 409
+
+    assert response.json()["detail"] == (
+
+        "La vidéo doit être au statut ERROR, statut actuel : READY."
+
+    )
+
+
+
+
+
+def test_reanalyze_restores_error_when_broker_is_down(client) -> None:
+
+    media_id = create_error_video(client)
+
+
+
+    def unavailable(_media_id: int):
+
+        raise ConnectionError("broker unavailable")
+
+
+
+    install_queue_override(unavailable)
+
+    response = client.post(f"/api/v1/media/{media_id}/reanalyze")
+
+
+
+    assert response.status_code == 503
+
+    video = client.get(f"/api/v1/media/{media_id}").json()
+
+    assert video["status"] == "ERROR"
+
+    assert video["error_message"] == "Analyse interrompue."
+
+    assert video["task_id"] is None

@@ -88,6 +88,22 @@ class VideoRepository:
             return None
         return self.get(video_id)
 
+    def mark_error_queued(self, video_id: int) -> Video | None:
+        result = self.session.execute(
+            update(Video)
+            .where(Video.id == video_id, Video.status == VideoStatus.ERROR)
+            .values(
+                status=VideoStatus.QUEUED,
+                error_message=None,
+                task_id=None,
+            )
+        )
+        self.session.commit()
+        if result.rowcount != 1:
+            return None
+        return self.get(video_id)
+
+
     def claim_processing(self, video_id: int, task_id: str | None) -> Video | None:
         claimable_status = Video.status == VideoStatus.QUEUED
         if task_id is not None:
