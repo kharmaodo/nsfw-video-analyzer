@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.auth import (
     get_audit_service,
@@ -75,7 +76,7 @@ def test_google_oauth_routes_and_one_time_exchange(monkeypatch) -> None:
     app.dependency_overrides[get_audit_service] = lambda: FakeAuditService()
 
     try:
-        with TestClient(app) as client:
+        with TestClient(SessionMiddleware(app, secret_key="test-oauth-session-secret")) as client:
             start = client.get("/auth/oauth/google/login")
             assert start.status_code == 200
             assert start.json() == {"provider": "google"}
@@ -133,7 +134,7 @@ def test_google_callback_redirects_when_google_rejects(monkeypatch) -> None:
     app.dependency_overrides[get_audit_service] = lambda: FakeAuditService()
 
     try:
-        with TestClient(app) as client:
+        with TestClient(SessionMiddleware(app, secret_key="test-oauth-session-secret")) as client:
             response = client.get(
                 "/auth/oauth/google/callback",
                 follow_redirects=False,
