@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     oauth_facebook_client_secret: str | None = None
     oauth_facebook_redirect_uri: str | None = None
     oauth_facebook_graph_api_version: str = "v26.0"
+    oauth_twitter_client_id: str | None = None
+    oauth_twitter_client_secret: str | None = None
+    oauth_twitter_redirect_uri: str | None = None
     oauth_frontend_success_url: str = "http://localhost:3000/login"
     oauth_frontend_link_success_url: str = "http://localhost:5173/settings"
     oauth_exchange_code_ttl_seconds: int = Field(default=60, ge=15, le=300)
