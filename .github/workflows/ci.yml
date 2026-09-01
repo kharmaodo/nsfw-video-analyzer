@@ -28,7 +28,7 @@ jobs:
       - run: python -m pip install -e ".[dev]"
         working-directory: backend
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: alembic upgrade head
+      - run: mkdir -p storage/database && alembic upgrade head
         working-directory: backend
       - run: pytest --cov=app --cov-report=term-missing
         working-directory: backend
