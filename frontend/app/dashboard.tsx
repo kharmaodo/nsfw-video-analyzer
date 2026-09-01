@@ -295,6 +295,8 @@ export default function Dashboard() {
         await api(`/api/v1/videos/${media.id}/validate`, { method: "POST" });
       } else if (media.status === "READY") {
         await api(`/api/v1/media/${media.id}/enqueue`, { method: "POST" });
+      } else if (media.status === "ERROR") {
+        await api(`/api/v1/media/${media.id}/reanalyze`, { method: "POST" });
       }
       await loadVideos(true);
     } catch (reason) {
@@ -472,7 +474,7 @@ export default function Dashboard() {
                     <td><strong className="cell-main">{formatBytes(media.size_bytes)}</strong><span className="cell-sub">{media.content_type ?? "type inconnu"}{media.width && media.height ? ` · ${media.width}×${media.height}` : ""}</span></td>
                     <td><strong className="cell-main">{formatDuration(media.duration_seconds)}</strong><span className="cell-sub">{media.sampled_frames ? `${media.sampled_frames} frame${media.sampled_frames > 1 ? "s" : ""}` : "non extrait"}</span></td>
                     <td>{media.nsfw_score === null ? <span className="score-empty">—</span> : <div className="score"><strong>{Math.round(media.nsfw_score * 100)}%</strong><span><i style={{ width: `${media.nsfw_score * 100}%` }} /></span><small>{media.nsfw_positive_frames} positive{media.nsfw_positive_frames > 1 ? "s" : ""}</small></div>}</td>
-                    <td>{(media.status === "DISCOVERED" || media.status === "READY") && <button className="action-button" onClick={() => runAction(media)} disabled={actingId === media.id}>{actingId === media.id ? <LoaderCircle className="spin" /> : media.status === "DISCOVERED" ? <ShieldCheck /> : <Play />}{media.status === "DISCOVERED" ? "Valider" : "Analyser"}</button>}</td>
+                    <td>{(media.status === "DISCOVERED" || media.status === "READY" || media.status === "ERROR") && <button className="action-button" onClick={() => runAction(media)} disabled={actingId === media.id}>{actingId === media.id ? <LoaderCircle className="spin" /> : media.status === "DISCOVERED" ? <ShieldCheck /> : media.status === "ERROR" ? <RefreshCw /> : <Play />}{media.status === "DISCOVERED" ? "Valider" : media.status === "ERROR" ? "Ré-analyser" : "Analyser"}</button>}</td>
                   </tr>;
                 })}
           </tbody></table></div>
