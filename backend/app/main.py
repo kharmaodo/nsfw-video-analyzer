@@ -16,6 +16,10 @@ from app.services.facebook_oauth_configuration import (
     FacebookOAuthConfiguration,
     FacebookOAuthConfigurationError,
 )
+from app.services.twitter_oauth_configuration import (
+    TwitterOAuthConfiguration,
+    TwitterOAuthConfigurationError,
+)
 from app.services.google_oidc_configuration import (
     GoogleOidcConfiguration,
     GoogleOidcConfigurationError,
@@ -68,8 +72,13 @@ try:
 except FacebookOAuthConfigurationError:
     facebook_oauth_configuration = None
 
+try:
+    twitter_oauth_configuration = TwitterOAuthConfiguration.from_settings(settings)
+except TwitterOAuthConfigurationError:
+    twitter_oauth_configuration = None
+
 oauth_session_configuration = (
-    google_oidc_configuration or facebook_oauth_configuration
+    google_oidc_configuration or facebook_oauth_configuration or twitter_oauth_configuration
 )
 if oauth_session_configuration is not None:
     app.add_middleware(
