@@ -11,6 +11,10 @@ from app.services.jwt_service import (
 
 PUBLIC_ENDPOINTS = {
     ("GET", "/health"),
+        ("GET", "/docs"),
+        ("GET", "/docs/oauth2-redirect"),
+        ("GET", "/redoc"),
+        ("GET", "/openapi.json"),
     ("POST", "/auth/login"),
         ("GET", "/auth/oauth/google/login"),
         ("GET", "/auth/oauth/google/callback"),

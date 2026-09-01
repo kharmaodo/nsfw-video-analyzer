@@ -67,7 +67,16 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        if request.url.path.rstrip("/") in {"/docs", "/redoc"}:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https:; connect-src 'self'; "
+                "frame-ancestors 'none'"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         logger.info(
             "request_complete method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
             request.method,
